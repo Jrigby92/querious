@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Querious — learn SQL by doing</title>
+<script src="https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/sql-wasm.js"></script>
+<style>
+  :root{
+    --bg:#0a0b14;
+    --bg2:#0e1020;
+    --panel:rgba(22,24,40,0.66);
+    --panel-solid:#13152a;
+    --stroke:rgba(255,255,255,0.08);
+    --stroke-strong:rgba(255,255,255,0.16);
+    --text:#e8eaf6;
+    --muted:#9aa0bf;
+    --faint:#6b7299;
+    --accent:#7c5cff;
+    --accent2:#22d3ee;
+    --good:#34d399;
+    --bad:#fb7185;
+    --warn:#fbbf24;
+    --key:#22d3ee;
+    --ref:#34d399;
+    --radius:16px;
+    --mono:ui-monospace,"SF Mono",Menlo,Monaco,"Cascadia Code",Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{min-height:100%}
+  body{
+    margin:0;font-family:var(--sans);color:var(--text);
+    background:
+      radial-gradient(1100px 700px at 12% -8%, rgba(124,92,255,0.18), transparent 60%),
+      radial-gradient(900px 600px at 100% 0%, rgba(34,211,238,0.12), transparent 55%),
+      linear-gradient(180deg,var(--bg),var(--bg2));
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:rgba(124,92,255,0.35)}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* ---------- Top bar ---------- */
+  header{
+    position:sticky;top:0;z-index:30;
+    display:flex;align-items:center;gap:18px;
+    padding:14px 22px;
+    background:rgba(10,11,20,0.72);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--stroke);
+  }
+  .brand{display:flex;align-items:center;gap:11px;font-weight:700;letter-spacing:.2px}
+  .logo{
+    width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    box-shadow:0 6px 22px rgba(124,92,255,0.45);
+    font-size:18px;
+  }
+  .brand .name{font-size:18px}
+  .brand .tag{font-size:12px;color:var(--muted);font-weight:500;margin-left:2px}
+  .spacer{flex:1}
+
+  .ability{
+    display:flex;align-items:center;gap:12px;
+    padding:7px 14px;border:1px solid var(--stroke);border-radius:999px;
+    background:var(--panel);
+  }
+  .ability .lvl{font-weight:700;font-size:13px}
+  .ability .lvl small{color:var(--muted);font-weight:500}
+  .meter{width:140px;height:8px;border-radius:99px;background:rgba(255,255,255,0.08);overflow:hidden}
+  .meter > i{
+    display:block;height:100%;width:30%;border-radius:99px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    transition:width .7s cubic-bezier(.2,.8,.2,1);
+  }
+  .progress-chip{font-size:13px;color:var(--muted)}
+  .progress-chip b{color:var(--text)}
+  .btn{
+    font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;
+    color:var(--text);background:rgba(255,255,255,0.06);
+    border:1px solid var(--stroke-strong);border-radius:10px;padding:8px 14px;
+    transition:.15s;
+  }
+  .btn:hover{background:rgba(255,255,255,0.12);transform:translateY(-1px)}
+  .btn.ghost{background:transparent}
+  .btn.tiny{padding:5px 10px;font-size:12px;border-radius:8px}
+
+  /* ---------- Layout ---------- */
+  .app{display:grid;grid-template-columns:268px 1fr;gap:0;min-height:calc(100vh - 63px)}
+  aside{
+    border-right:1px solid var(--stroke);
+    padding:18px 14px;position:sticky;top:63px;height:calc(100vh - 63px);overflow:auto;
+  }
+  .side-title{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:var(--faint);margin:6px 8px 12px}
+  .lesson-item{
+    display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:12px;cursor:pointer;
+    color:var(--muted);margin-bottom:3px;border:1px solid transparent;transition:.15s;font-size:14px;
+  }
+  .lesson-item:hover{background:rgba(255,255,255,0.05);color:var(--text)}
+  .lesson-item.active{background:rgba(124,92,255,0.14);border-color:rgba(124,92,255,0.4);color:#fff}
+  .lesson-item.locked{opacity:.45;cursor:not-allowed}
+  .dot{
+    width:24px;height:24px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+    font-size:12px;font-weight:700;background:rgba(255,255,255,0.07);border:1px solid var(--stroke-strong);
+  }
+  .lesson-item.done .dot{background:linear-gradient(135deg,var(--good),#0ea5e9);border-color:transparent;color:#04211a}
+  .lesson-item.active .dot{border-color:var(--accent)}
+  .lesson-item .label{flex:1;line-height:1.25}
+  .lesson-item .concept{display:block;font-size:11px;color:var(--faint)}
+  .sandbox-link{margin-top:14px;border-top:1px solid var(--stroke);padding-top:14px}
+
+  main{padding:26px 30px 80px;max-width:1180px;width:100%;margin:0 auto}
+
+  .card{
+    background:var(--panel);border:1px solid var(--stroke);border-radius:var(--radius);
+    backdrop-filter:blur(10px);box-shadow:0 18px 50px rgba(0,0,0,0.35);
+  }
+  .pad{padding:22px 24px}
+
+  .lesson-head h1{margin:0 0 4px;font-size:26px;letter-spacing:-0.3px}
+  .lesson-head .crumbs{font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:1.3px;margin-bottom:10px}
+  .blurb{color:var(--muted);line-height:1.65;font-size:15px}
+  .blurb code{font-family:var(--mono);background:rgba(124,92,255,0.16);color:#cbbcff;padding:2px 6px;border-radius:6px;font-size:13px}
+  .goal{
+    margin-top:18px;display:flex;gap:13px;align-items:flex-start;
+    background:linear-gradient(90deg,rgba(124,92,255,0.14),rgba(34,211,238,0.06));
+    border:1px solid rgba(124,92,255,0.3);border-radius:13px;padding:15px 17px;
+  }
+  .goal .gicon{font-size:20px;line-height:1.2}
+  .goal .gtext{font-size:15px;line-height:1.5}
+  .goal .gtext b{color:#fff}
+
+  .section-label{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:var(--faint);margin:26px 2px 12px;font-weight:700}
+
+  /* ---------- Schema tables ---------- */
+  .schema{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .tbl-card{background:rgba(13,15,30,0.6);border:1px solid var(--stroke);border-radius:14px;overflow:hidden}
+  .tbl-card h3{
+    margin:0;padding:12px 15px;font-size:14px;display:flex;align-items:center;gap:9px;
+    border-bottom:1px solid var(--stroke);background:rgba(255,255,255,0.03);
+  }
+  .tbl-card h3 .pill{font-size:10px;font-weight:600;color:var(--faint);background:rgba(255,255,255,0.07);padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.6px}
+  .tbl-wrap{overflow:auto;max-height:440px}
+  table.data{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px}
+  table.data th,table.data td{padding:8px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.05)}
+  table.data th{color:var(--muted);font-weight:600;position:relative;transition:.25s}
+  table.data td{color:#cfd3ee;transition:.25s}
+  table.data tr:last-child td{border-bottom:none}
+  table.data td.null{color:var(--faint);font-style:italic}
+  /* highlight states */
+  .col-ref{background:rgba(52,211,153,0.14)!important}
+  th.col-ref{color:#a7f3d0!important;box-shadow:inset 0 -2px 0 var(--ref)}
+  .col-key{background:rgba(34,211,238,0.18)!important}
+  th.col-key{color:#a5f3fc!important;box-shadow:inset 0 -2px 0 var(--key)}
+  th.col-key::after{content:"🔑";position:absolute;right:6px;top:7px;font-size:10px}
+  /* row-level highlighting: which rows survive the query */
+  table.data tbody tr{transition:opacity .25s}
+  tr.row-hit td{background:rgba(52,211,153,0.07)}
+  tr.row-hit td:first-child{box-shadow:inset 2.5px 0 0 var(--good)}
+  tr.row-miss td{opacity:.32}
+
+  /* ---------- JOIN visualizer ---------- */
+  .joinviz{display:grid;grid-template-columns:300px 1fr;gap:22px;align-items:center}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .chip{
+    cursor:pointer;font-size:13px;font-weight:600;padding:8px 13px;border-radius:10px;
+    border:1px solid var(--stroke-strong);background:rgba(255,255,255,0.05);color:var(--muted);transition:.15s;
+  }
+  .chip:hover{color:#fff;background:rgba(255,255,255,0.1)}
+  .chip.active{background:linear-gradient(135deg,rgba(124,92,255,.9),rgba(34,211,238,.85));color:#08111e;border-color:transparent;box-shadow:0 6px 18px rgba(124,92,255,.4)}
+  .viz-explain{font-size:14px;color:var(--muted);line-height:1.6;min-height:48px}
+  .viz-explain b{color:#fff}
+  .viz-explain .ins{margin-top:10px}
+  svg .region{transition:opacity .45s ease, fill .3s}
+  svg .region{opacity:0}
+  svg .region.on{opacity:1}
+  svg .circ{fill:none;stroke:rgba(255,255,255,0.5);stroke-width:2}
+  svg .clabel{fill:var(--text);font:600 14px var(--sans)}
+  svg .csub{fill:var(--faint);font:500 11px var(--sans)}
+
+  /* ---------- Editor ---------- */
+  .editor-wrap{margin-top:6px}
+  .editor-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .editor-toolbar .hint-note{font-size:13px;color:var(--muted);flex:1}
+  .editor{
+    position:relative;border:1px solid var(--stroke-strong);border-radius:13px;overflow:hidden;
+    background:#0b0d1c;box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .editor.focused{border-color:rgba(124,92,255,0.55);box-shadow:0 0 0 3px rgba(124,92,255,0.18)}
+  .editor pre,.editor textarea{
+    margin:0;padding:16px 18px;font-family:var(--mono);font-size:14.5px;line-height:1.6;
+    tab-size:2;white-space:pre-wrap;word-break:break-word;
+    border:0;width:100%;min-height:118px;
+  }
+  .editor pre{position:absolute;inset:0;pointer-events:none;overflow:auto;color:#dfe3ff}
+  .editor textarea{
+    position:relative;background:transparent;color:transparent;caret-color:#fff;resize:vertical;
+    outline:none;-webkit-text-fill-color:transparent;
+  }
+  .editor textarea::selection{background:rgba(124,92,255,0.4)}
+  .t-kw{color:#c4b5fd;font-weight:600}
+  .t-fn{color:#67e8f9}
+  .t-str{color:#86efac}
+  .t-num{color:#fcd34d}
+  .t-com{color:var(--faint);font-style:italic}
+
+  .run-row{display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap}
+  .btn.run{
+    background:linear-gradient(135deg,var(--accent),#9b7bff);border:none;color:#fff;font-size:14px;padding:10px 22px;
+    box-shadow:0 8px 22px rgba(124,92,255,.45);
+  }
+  .btn.run:hover{filter:brightness(1.08)}
+  .kbd{font-family:var(--mono);font-size:11px;color:var(--faint);background:rgba(255,255,255,0.06);border:1px solid var(--stroke);border-radius:6px;padding:2px 6px}
+
+  /* ---------- Results ---------- */
+  .result{margin-top:18px}
+  .banner{
+    display:flex;align-items:center;gap:12px;padding:14px 17px;border-radius:13px;font-size:15px;margin-bottom:14px;
+    animation:pop .35s cubic-bezier(.2,.9,.3,1.3);
+  }
+  @keyframes pop{from{transform:scale(.97);opacity:0}to{transform:scale(1);opacity:1}}
+  .banner.ok{background:rgba(52,211,153,0.14);border:1px solid rgba(52,211,153,0.4);color:#a7f3d0}
+  .banner.err{background:rgba(251,113,133,0.13);border:1px solid rgba(251,113,133,0.4);color:#fecdd3}
+  .banner.warn{background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.4);color:#fde68a}
+  .banner .bicon{font-size:20px}
+  .banner b{color:#fff}
+  .banner .diag{display:inline-block;margin-top:7px;color:#fde68a;line-height:1.5}
+  .banner .diag code{background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:5px}
+  .result-meta{font-size:12px;color:var(--faint);margin:4px 2px 10px}
+  .result-scroll{overflow:auto;border:1px solid var(--stroke);border-radius:12px;max-height:340px}
+
+  .hints{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+  .hint{
+    background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.28);border-radius:12px;padding:12px 15px;
+    font-size:14px;color:#fde9b8;display:flex;gap:10px;animation:pop .3s ease;
+  }
+  .hint .hicon{flex:0 0 auto}
+
+  .empty{color:var(--faint);font-size:14px;padding:8px 2px}
+
+
+  /* ---------- Skills sidebar ---------- */
+  .skill-row{display:block;padding:9px 11px;border-radius:12px;cursor:pointer;border:1px solid transparent;color:var(--muted);margin-bottom:3px;transition:.15s}
+  .skill-row:hover{background:rgba(255,255,255,0.05);color:var(--text)}
+  .skill-row.active{background:rgba(124,92,255,0.14);border-color:rgba(124,92,255,0.4);color:#fff}
+  .skill-row.locked{opacity:.45}
+  .skill-top{display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:8px}
+  .skill-top .cnt{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .skill-bar{height:5px;border-radius:99px;background:rgba(255,255,255,0.08);margin-top:6px;overflow:hidden}
+  .skill-bar > i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .5s}
+  .skill-row.mastered .skill-bar > i{background:linear-gradient(90deg,var(--good),#0ea5e9)}
+
+  /* ---------- Auto-advance strip ---------- */
+  .auto-next{display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:10px 14px;border:1px solid rgba(52,211,153,0.35);background:rgba(52,211,153,0.08);border-radius:11px;font-size:13px;color:#a7f3d0}
+  .auto-track{flex:1;height:5px;background:rgba(255,255,255,0.12);border-radius:99px;overflow:hidden}
+  .auto-track > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--good),var(--accent2));animation:autofill 2.2s linear forwards}
+  @keyframes autofill{to{width:100%}}
+
+  /* ---------- Walkthrough (tutorial) ---------- */
+  .tut{
+    margin-top:20px;border-radius:14px;padding:16px 18px;
+    border:1px solid rgba(34,211,238,0.35);
+    background:linear-gradient(135deg,rgba(34,211,238,0.08),rgba(124,92,255,0.08));
+  }
+  .tut-head{display:flex;align-items:center;gap:12px}
+  .tut-title{font-weight:700;font-size:14px;color:#a5f3fc;white-space:nowrap}
+  .tut-count{color:var(--faint);font-weight:500;margin-left:6px}
+  .tut-dots{flex:1;display:flex;gap:5px;justify-content:center;flex-wrap:wrap}
+  .tdot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,0.15);transition:.25s}
+  .tdot.on{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .tut-body{animation:pop .3s ease}
+  .tut-say{margin:12px 0 4px}
+  .tut-code{
+    margin:12px 0 8px;padding:13px 16px;background:#0b0d1c;border:1px solid var(--stroke-strong);
+    border-radius:11px;font-family:var(--mono);font-size:14px;line-height:1.6;
+    white-space:pre-wrap;word-break:break-word;color:#dfe3ff;
+  }
+  .tut-new{
+    display:inline-flex;gap:7px;align-items:center;font-size:12.5px;color:#fde68a;
+    background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);
+    border-radius:99px;padding:4px 12px;margin:2px 0 8px;
+  }
+  .tut-new code{font-family:var(--mono)}
+  .tut-result{margin-top:10px}
+  .tut-result .result-scroll{max-height:240px}
+  .tut-nav{display:flex;gap:10px;margin-top:14px;align-items:center}
+  .tut-nav #tut-next{margin-left:auto}
+
+  /* loading / error overlay */
+  .overlay{
+    position:fixed;inset:0;z-index:100;display:grid;place-items:center;
+    background:rgba(8,9,16,0.92);backdrop-filter:blur(8px);text-align:center;padding:30px;
+  }
+  .overlay .box{max-width:440px}
+  .spinner{width:46px;height:46px;border-radius:50%;border:4px solid rgba(255,255,255,0.12);border-top-color:var(--accent);margin:0 auto 20px;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .overlay h2{margin:0 0 8px}
+  .overlay p{color:var(--muted);line-height:1.6}
+
+  .toast{
+    position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(120px);
+    background:var(--panel-solid);border:1px solid var(--stroke-strong);border-radius:14px;
+    padding:14px 20px;display:flex;align-items:center;gap:14px;z-index:60;box-shadow:0 18px 50px rgba(0,0,0,0.5);
+    transition:transform .45s cubic-bezier(.2,.9,.3,1.2);max-width:520px;
+  }
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  .toast .ttext{font-size:14px;line-height:1.4}
+  .toast .ttext b{color:#fff}
+
+  #confetti{position:fixed;inset:0;pointer-events:none;z-index:80}
+
+  @media (max-width:980px){
+    .app{grid-template-columns:1fr}
+    aside{position:relative;top:0;height:auto;border-right:none;border-bottom:1px solid var(--stroke)}
+    .schema{grid-template-columns:1fr}
+    .joinviz{grid-template-columns:1fr}
+    .meter{width:90px}
+  }
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay">
+  <div class="box">
+    <div class="spinner" id="spinner"></div>
+    <h2 id="ov-title">Warming up the database…</h2>
+    <p id="ov-msg">Loading a real SQLite engine so your queries actually run.</p>
+  </div>
+</div>
+
+<header>
+  <div class="brand">
+    <div class="logo">◧</div>
+    <div>
+      <span class="name">Querious</span>
+      <span class="tag">· learn SQL by doing</span>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="ability" title="Auto-detected from how you solve each step">
+    <div class="lvl"><span id="lvl-name">Novice</span> <small id="lvl-sub">· level 1</small></div>
+    <div class="meter"><i id="meter-fill"></i></div>
+  </div>
+  <div class="progress-chip"><b id="prog-done">0</b>/<span id="prog-total">10</span> done</div>
+  <button class="btn ghost tiny" id="reset-btn" title="Erase progress and start over">Reset</button>
+</header>
+
+<div class="app">
+  <aside>
+    <div class="side-title">Practice</div>
+    <div id="lesson-list"></div>
+    <div class="sandbox-link">
+      <div class="lesson-item" id="sandbox-item" data-sandbox="1">
+        <div class="dot">∞</div>
+        <div class="label">Sandbox<span class="concept">run anything you like</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <main id="main"><!-- lesson rendered here --></main>
+</div>
+
+<div class="toast" id="toast">
+  <div class="ttext" id="toast-text"></div>
+  <button class="btn tiny" id="toast-action" style="display:none"></button>
+  <button class="btn ghost tiny" id="toast-dismiss">Dismiss</button>
+</div>
+
+<canvas id="confetti"></canvas>
+
+<script>
+/* ============================================================
+   Querious v2 — adaptive practice engine
+   200 generated questions · 14 skills · mastery-based selection
+   ============================================================ */
+
+/* ---------------- Data ---------------- */
+const CUSTOMERS=[
+  [1,'Ada','London',36],[2,'Grace','New York',41],[3,'Linus','Helsinki',28],
+  [4,'Margaret','Boston',52],[5,'Alan','London',24],[6,'Katherine','New York',47],
+  [7,'Tim','Helsinki',33],[8,'Radia','Boston',39],[9,'Edsger','Tokyo',58],
+  [10,'Joan','London',62],[11,'Ken','Tokyo',19],[12,'Barbara','Tokyo',45]
+];
+const ORDERS=[
+  [101,1,'Keyboard',45],[102,1,'Monitor',220],[103,1,'Cable',12],
+  [104,2,'Mouse',25],[105,2,'Laptop',1200],[106,3,'Webcam',60],
+  [107,null,'Headphones',80],[108,5,'Laptop',1150],[109,5,'Headphones',95],
+  [110,6,'Keyboard',55],[111,6,'Microphone',130],[112,8,'Monitor',240],
+  [113,8,'USB Hub',18],[114,9,'Desk Lamp',35],[115,9,'Laptop',1320],
+  [116,9,'Cable',14],[117,10,'Keyboard',70],[118,10,'Webcam',85],
+  [119,11,'Mouse',22],[120,11,'USB Hub',20],[121,null,'Desk Lamp',30],
+  [122,2,'Headphones',110],[123,6,'Microphone',145],[124,10,'Monitor',199]
+];
+const COLUMNS={ customers:['id','name','city','age'], orders:['id','customer_id','product','amount'] };
+const CITIES=['London','New York','Helsinki','Boston','Tokyo'];
+const SCHEMA_SQL =
+  'CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT, city TEXT, age INTEGER);\n' +
+  'INSERT INTO customers (id,name,city,age) VALUES ' +
+  CUSTOMERS.map(c=>`(${c[0]},'${c[1]}','${c[2]}',${c[3]})`).join(',') + ';\n' +
+  'CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, product TEXT, amount INTEGER);\n' +
+  'INSERT INTO orders (id,customer_id,product,amount) VALUES ' +
+  ORDERS.map(o=>`(${o[0]},${o[1]===null?'NULL':o[1]},'${o[2]}',${o[3]})`).join(',') + ';';
+
+/* ---------------- Skills (concepts) ---------------- */
+const CONCEPT_ORDER=['select','columns','where','where-multi','order','limit','distinct','aggregate','group','having','inner-join','left-join','full-join','join-group'];
+const CONCEPT_META={
+  'select':      {label:'SELECT basics',   blurb:'Every SQL query starts with <code>SELECT</code> (which columns) and <code>FROM</code> (which table). The star <code>*</code> means <b>every column</b>.'},
+  'columns':     {label:'Picking columns', blurb:'List the exact columns you want, separated by commas — they come back in the order you ask.'},
+  'where':       {label:'WHERE filters',   blurb:'<code>WHERE</code> keeps only the rows that match a condition. Text values need <b>single quotes</b>.'},
+  'where-multi': {label:'AND / OR',        blurb:'Combine conditions: <code>AND</code> needs both to pass, <code>OR</code> needs either one.'},
+  'order':       {label:'Sorting',         blurb:'<code>ORDER BY</code> sorts results by a column — add <code>DESC</code> for high→low.'},
+  'limit':       {label:'LIMIT / top-N',   blurb:'<code>LIMIT n</code> keeps just the first n rows — combined with <code>ORDER BY</code>, that is a top-N list.'},
+  'distinct':    {label:'DISTINCT',        blurb:'<code>DISTINCT</code> collapses duplicates so each value appears once.'},
+  'aggregate':   {label:'Aggregates',      blurb:'Aggregate functions crunch many rows into one number: <code>COUNT</code>, <code>SUM</code>, <code>AVG</code>, <code>MIN</code>, <code>MAX</code>.'},
+  'group':       {label:'GROUP BY',        blurb:'<code>GROUP BY</code> folds rows sharing a value into one row per value — aggregates then run <b>within each group</b>.'},
+  'having':      {label:'HAVING',          blurb:'<code>WHERE</code> filters rows <i>before</i> grouping; <code>HAVING</code> filters the <i>groups</i> after.'},
+  'inner-join':  {label:'INNER JOIN',      blurb:'<code>JOIN … ON</code> stitches two tables together via matching columns — and keeps only rows that match on both sides.', join:'inner'},
+  'left-join':   {label:'LEFT JOIN',       blurb:'<code>LEFT JOIN</code> keeps <b>every row of the left table</b>; missing right-side values come back as <code>NULL</code>.', join:'left'},
+  'full-join':   {label:'FULL JOIN',       blurb:'<code>FULL JOIN</code> keeps unmatched rows from <b>both</b> sides, padded with <code>NULL</code>s.', join:'full'},
+  'join-group':  {label:'JOIN + GROUP BY', blurb:'The full combo: join the tables, group the rows, aggregate each group.', join:'left'}
+};
+const PREREQ={
+  'select':[], 'columns':['select'], 'where':['columns'], 'where-multi':['where'],
+  'order':['where'], 'limit':['order'], 'distinct':['columns'], 'aggregate':['where'],
+  'group':['aggregate'], 'having':['group'], 'inner-join':['where'],
+  'left-join':['inner-join'], 'full-join':['left-join'], 'join-group':['inner-join','group']
+};
+const QUOTA={ 'select':2,'columns':16,'where':24,'where-multi':14,'order':12,'limit':10,
+  'distinct':6,'aggregate':24,'group':18,'having':10,'inner-join':22,'left-join':14,
+  'full-join':8,'join-group':20 };
+
+/* ---------------- Walkthroughs (teach-mode per skill) ---------------- */
+const TUTORIALS={
+  'select':[
+    {say:"First, what you're looking at: a <b>database</b> stores information in <b>tables</b> — grids, like spreadsheets. Ours has two, shown below: <code>customers</code> and <code>orders</code>. Each <b>row</b> is one record; each <b>column</b> is one property, like <code>name</code> or <code>city</code>."},
+    {say:"<b>SQL</b> (Structured Query Language) is how you ask a database questions. You type a <b>query</b> — a one-line request — run it, and the database answers with a table of results. Let's build your very first query, word by word."},
+    {say:"Every query starts with the keyword <code>SELECT</code>. It means: <i>“fetch me some data”</i>. (Capital letters are just a style convention — <code>select</code> works exactly the same.)", sql:"SELECT", new:"SELECT"},
+    {say:"Next, what to fetch. The star <code>*</code> means <b>“every column”</b>. So far our query says: “fetch everything…”", sql:"SELECT *", new:"*"},
+    {say:"Finally, <code>FROM</code> names the table. That's a complete query! Press <b>▶ Run it</b> and watch the entire <code>orders</code> table come back.", sql:"SELECT * FROM orders", new:"FROM orders", run:true},
+    {say:"🎉 That's the universal pattern: <code>SELECT</code> <i>what</i> <code>FROM</code> <i>which table</i>. Now it's your turn."}
+  ],
+  'columns':[
+    {say:"Using <code>*</code> grabs every column, but often you only care about one or two. Name a column instead of the star, and you get <b>just that one</b>. Run it and compare with the full table below.", sql:"SELECT product FROM orders", new:"product", run:true},
+    {say:"Want several columns? <b>List them with commas.</b> They come back in exactly the order you write them.", sql:"SELECT product, amount FROM orders", new:", amount", run:true},
+    {say:"One catch: spelling must match the column header exactly — peek at the tables below whenever unsure. Your turn."}
+  ],
+  'where':[
+    {say:"So far every query returned <b>all</b> the rows. Usually you want just some — that's the job of <code>WHERE</code>: it tests every row and keeps only the ones that pass."},
+    {say:"Add <code>WHERE</code> + a condition after the table name. Here: only orders that cost more than 100. Numbers compare with <code>&gt;</code>, <code>&lt;</code> or <code>=</code>.", sql:"SELECT * FROM orders WHERE amount > 100", new:"WHERE amount > 100", run:true},
+    {say:"Comparing <b>text</b>? Wrap the value in <b>single quotes</b>: <code>'Laptop'</code>. Forgetting the quotes is the #1 beginner error — without them the database thinks you mean a column name.", sql:"SELECT * FROM orders WHERE product = 'Laptop'", new:"'Laptop'", run:true},
+    {say:"Your turn — and remember the quotes around text!"}
+  ],
+  'where-multi':[
+    {say:"One condition is often not enough. <code>AND</code> keeps a row only if <b>both</b> tests pass; <code>OR</code> keeps it if <b>either</b> does."},
+    {say:"Londoners over 30: the row must pass <i>both</i> tests to survive.", sql:"SELECT name, age FROM customers WHERE city = 'London' AND age > 30", new:"AND", run:true},
+    {say:"Swap to <code>OR</code> and you get rows passing <i>either</i> test — here, anyone in Tokyo <i>or</i> anyone under 25.", sql:"SELECT name, city, age FROM customers WHERE city = 'Tokyo' OR age < 25", new:"OR", run:true},
+    {say:"Your turn. Read the task carefully: does it need <i>both</i> conditions (AND) or <i>either</i> (OR)?"}
+  ],
+  'order':[
+    {say:"<code>ORDER BY</code> sorts your results by a column. Text sorts alphabetically (A→Z), numbers low→high. Try it:", sql:"SELECT * FROM orders ORDER BY product", new:"ORDER BY product", run:true},
+    {say:"Add <code>DESC</code> (<i>descending</i>) to flip the direction — Z→A for text, biggest-first for numbers. (The default is <code>ASC</code>, ascending, which you rarely need to type.)", sql:"SELECT * FROM orders ORDER BY product DESC", new:"DESC", run:true},
+    {say:"Your turn: read the task to see which column to sort by — and which direction."}
+  ],
+  'limit':[
+    {say:"<code>LIMIT n</code> chops the result down to the first <b>n</b> rows. On its own that's arbitrary — but right after an <code>ORDER BY</code>, it becomes a <b>top-N list</b>."},
+    {say:"The 3 most expensive orders: sort high→low, then keep 3.", sql:"SELECT product, amount FROM orders ORDER BY amount DESC LIMIT 3", new:"LIMIT 3", run:true},
+    {say:"Flip the sort to <code>ASC</code> and the same LIMIT gives you the <i>cheapest</i> instead. Your turn."}
+  ],
+  'distinct':[
+    {say:"Columns often repeat values — twelve customers, but only five cities. <code>SELECT DISTINCT</code> collapses the duplicates so each value appears <b>once</b>.", sql:"SELECT DISTINCT city FROM customers", new:"DISTINCT", run:true},
+    {say:"It works inside <code>COUNT()</code> too: how many <i>different</i> products have been ordered?", sql:"SELECT COUNT(DISTINCT product) FROM orders", new:"COUNT(DISTINCT …)", run:true},
+    {say:"Your turn — watch out: <code>COUNT(DISTINCT …)</code> ignores NULLs."}
+  ],
+  'aggregate':[
+    {say:"Sometimes you don't want the rows themselves — you want a <b>number about them</b>: how many, the total, the biggest. That's what <b>aggregate functions</b> do: they crunch many rows into one answer."},
+    {say:"<code>COUNT(*)</code> counts rows. Twelve customers, so the whole answer is one row with one number: <b>12</b>.", sql:"SELECT COUNT(*) FROM customers", new:"COUNT(*)", run:true},
+    {say:"Same family: <code>SUM()</code>, <code>AVG()</code>, <code>MIN()</code> and <code>MAX()</code> — these take a column to crunch.", sql:"SELECT MAX(amount) FROM orders", new:"MAX(amount)", run:true},
+    {say:"You can aggregate a <i>filtered</i> set too — just add a WHERE first: <code>SELECT COUNT(*) FROM orders WHERE amount &gt; 100</code>. Your turn."}
+  ],
+  'group':[
+    {say:"<code>GROUP BY</code> is the power move. It folds rows that share a value into <b>one row per value</b> — and aggregates like <code>COUNT</code> then work <i>within each group</i>. Think: “per customer”, “per city”, “per product”."},
+    {say:"One row per <code>customer_id</code>, each with its own count. (Even the mysterious <code>NULL</code> customer gets a row — we'll meet them properly in the JOIN lessons.)", sql:"SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id", new:"GROUP BY customer_id", run:true},
+    {say:"Swap <code>COUNT(*)</code> for <code>SUM(amount)</code> and you'd get money instead of counts. Your turn."}
+  ],
+  'having':[
+    {say:"After a <code>GROUP BY</code> you sometimes want to keep only <i>some groups</i> — “cities with more than 2 customers”. <code>WHERE</code> can't do it (it runs <i>before</i> grouping). That's what <code>HAVING</code> is for: a filter that runs <b>after</b> the groups are made."},
+    {say:"Only groups passing the test survive. London and Tokyo have 3 customers each — everyone else is filtered out.", sql:"SELECT city, COUNT(*) FROM customers GROUP BY city HAVING COUNT(*) > 2", new:"HAVING COUNT(*) > 2", run:true},
+    {say:"Rule of thumb: <code>WHERE</code> filters <b>rows</b>, <code>HAVING</code> filters <b>groups</b>. Your turn."}
+  ],
+  'inner-join':[
+    {say:"Why two tables at all? Repeating a customer's name on every order would be wasteful — and one typo away from chaos. So each order stores just a <b>number</b>: its <code>customer_id</code>, pointing at the customers table."},
+    {say:"To see names next to products, we <b>join</b> the tables back together. The link is glowing below: <code>orders.customer_id</code> 🔑 points at <code>customers.id</code> 🔑. (The JOIN explorer above previews what each join type keeps.)", keys:true},
+    {say:"<code>JOIN orders</code> pulls in the second table, and <code>ON</code> says how rows pair up. With two tables in play, prefix each column with its table: <code>customers.city</code>, <code>orders.amount</code>.", sql:"SELECT customers.city, orders.amount\nFROM customers\nJOIN orders ON customers.id = orders.customer_id", new:"JOIN … ON", run:true},
+    {say:"Look closely: the quiet customers (<b>Margaret, Tim, Barbara</b> — no orders) are missing, and so are the <b>two orphan orders</b> with no customer. A plain <code>JOIN</code> keeps only rows that match on <i>both</i> sides. Your turn."}
+  ],
+  'left-join':[
+    {say:"The inner join silently dropped Margaret, Tim and Barbara. But what if the question is: <i>“show every customer, and what they bought — if anything”</i>? You need a join that <b>refuses to drop rows from the left table</b>."},
+    {say:"<code>LEFT JOIN</code> keeps <b>every row of the left table</b> — the one named after <code>FROM</code>. No match on the right? Those columns come back as <code>NULL</code>. Run it and find the three quiet customers.", sql:"SELECT customers.name, orders.amount\nFROM customers\nLEFT JOIN orders ON customers.id = orders.customer_id", new:"LEFT JOIN", run:true},
+    {say:"Those NULL rows are a feature, not a bug — they're exactly how you find customers who never ordered: <code>WHERE orders.id IS NULL</code>. Your turn."}
+  ],
+  'full-join':[
+    {say:"One puzzle left: the two orphan orders that belong to nobody. <code>LEFT JOIN</code> rescued the quiet customers — the orphans need the mirror image. <code>FULL JOIN</code> does both at once: it keeps <b>unmatched rows from both sides</b>.", keys:true},
+    {say:"27 rows: the 22 matches, plus 3 quiet customers (NULLs on the right) <b>and</b> 2 orphan orders (NULLs on the left). Click through the explorer chips above to compare all four join types.", sql:"SELECT customers.city, orders.amount\nFROM customers\nFULL JOIN orders ON customers.id = orders.customer_id", new:"FULL JOIN", run:true},
+    {say:"(<code>RIGHT JOIN</code> also exists — it's just a LEFT JOIN with the tables' roles swapped.) Your turn."}
+  ],
+  'join-group':[
+    {say:"Real queries are these pieces <b>snapped together</b>. A good order to think in: <code>FROM</code>+<code>JOIN</code> (what data) → <code>GROUP BY</code> (per what) → <code>SELECT</code> (show what) → <code>ORDER BY</code> (sorted how)."},
+    {say:"A worked example: <b>money spent per customer</b>, biggest spender first. New trick: <code>AS total</code> renames the result column so we can sort by it. The NULLs at the bottom are the LEFT JOIN keeping the quiet customers in.", sql:"SELECT customers.name, SUM(orders.amount) AS total\nFROM customers\nLEFT JOIN orders ON customers.id = orders.customer_id\nGROUP BY customers.id\nORDER BY total DESC", new:"AS total", run:true},
+    {say:"⚠️ One classic trap when counting per customer: <code>COUNT(*)</code> counts the NULL row as 1, but <code>COUNT(orders.id)</code> correctly gives quiet customers <b>0</b>. Your turn."}
+  ]
+};
+
+/* ---------------- Question generator ---------------- */
+function mulberry(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};}
+function seededShuffle(arr,seed){const r=mulberry(seed);for(let i=arr.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
+function fmtCols(cols){const b=cols.map(c=>'<b>'+c+'</b>');return b.length===1?b[0]:b.slice(0,-1).join(', ')+' and '+b[b.length-1];}
+function Q(id,concept,level,title,prompt,solution,x){x=x||{};return{id,concept,level,title,prompt,solution,
+  orderMatters:!!x.ord,requires:x.req||null,reqMsg:x.reqMsg||null,hints:x.hints||[]};}
+
+const FAMILIES={};
+FAMILIES['select']=()=>[
+  Q('sel:customers','select',1,'Hello, customers','Show <b>everything</b> in the <code>customers</code> table.','SELECT * FROM customers',
+    {hints:['You need two keywords: <code>SELECT</code> (what) and <code>FROM</code> (which table).','The star <code>*</code> means “all columns”.']}),
+  Q('sel:orders','select',1,'Hello, orders','Show <b>everything</b> in the <code>orders</code> table.','SELECT * FROM orders',
+    {hints:['Same pattern as before — only the table name changes.','<code>SELECT * FROM …</code> — which table holds the orders?']})
+];
+FAMILIES['columns']=()=>{
+  const sets={customers:[['name'],['city'],['age'],['name','city'],['name','age'],['city','age'],['age','name'],['name','city','age']],
+              orders:[['product'],['amount'],['customer_id'],['product','amount'],['customer_id','product'],['amount','product'],['customer_id','amount'],['customer_id','product','amount']]};
+  const out=[];
+  for(const t in sets) sets[t].forEach(cols=>{
+    out.push(Q('col:'+t+':'+cols.join(','),'columns',cols.length>2||cols[0]==='age'||cols[0]==='amount'?2:1,'Just the columns you need',
+      `From <code>${t}</code>, show only ${fmtCols(cols)}${cols.length>1?' — in that order':''}.`,
+      `SELECT ${cols.join(', ')} FROM ${t}`,
+      {hints:['Replace the <code>*</code> with the column names you want, separated by commas.',`The columns, in order: <code>${cols.join(', ')}</code>.`]}));
+  });
+  return out;
+};
+FAMILIES['where']=()=>{
+  const out=[];const wh={req:/\bwhere\b/i,reqMsg:'a <code>WHERE</code> filter'};
+  const h=(col,ex)=>['Add a <code>WHERE</code> clause testing the <code>'+col+'</code> column.','Pattern: <code>WHERE '+ex+'</code> — adapt the value.'];
+  CITIES.forEach(c=>out.push(Q('w:city:'+c,'where',1,'Locals only',`Show the <b>name</b> of every customer who lives in <b>${c}</b>.`,`SELECT name FROM customers WHERE city = '${c}'`,{...wh,hints:h('city',"city = 'London'")})));
+  ['London','Tokyo'].forEach(c=>out.push(Q('w:notcity:'+c,'where',2,'Everyone but…',`Show the <b>name and city</b> of every customer who does <b>not</b> live in <b>${c}</b>.`,`SELECT name, city FROM customers WHERE city != '${c}'`,{...wh,hints:['“Not equal” is written <code>!=</code> (or <code>&lt;&gt;</code>).',`<code>WHERE city != '${c}'</code> — quotes still needed.`]})));
+  ['Laptop','Keyboard','Monitor','Headphones','Mouse','Webcam'].forEach(p=>out.push(Q('w:prod:'+p,'where',1,'One product',`Show the <b>product and amount</b> of every <b>${p}</b> order.`,`SELECT product, amount FROM orders WHERE product = '${p}'`,{...wh,hints:h('product',"product = 'Laptop'")})));
+  [100,200,1000].forEach(x=>out.push(Q('w:amtgt:'+x,'where',2,'Big orders',`Show <b>all columns</b> of the orders costing <b>more than ${x}</b>.`,`SELECT * FROM orders WHERE amount > ${x}`,{...wh,hints:h('amount','amount > 100')})));
+  [30,60].forEach(x=>out.push(Q('w:amtlt:'+x,'where',2,'Small orders',`Show <b>all columns</b> of the orders costing <b>less than ${x}</b>.`,`SELECT * FROM orders WHERE amount < ${x}`,{...wh,hints:h('amount','amount < 50')})));
+  out.push(Q('w:amtgte:199','where',2,'At least…',`Show the <b>product and amount</b> of orders costing <b>199 or more</b>.`,'SELECT product, amount FROM orders WHERE amount >= 199',{...wh,hints:['“…or more” means <code>&gt;=</code>, not just <code>&gt;</code>.','<code>WHERE amount &gt;= 199</code>']}));
+  [30,40,50].forEach(x=>out.push(Q('w:agegt:'+x,'where',2,'Older than',`Show the <b>name and age</b> of customers <b>older than ${x}</b>.`,`SELECT name, age FROM customers WHERE age > ${x}`,{...wh,hints:h('age','age > 30')})));
+  [30,25].forEach(x=>out.push(Q('w:agelt:'+x,'where',2,'Younger than',`Show the <b>name and age</b> of customers <b>younger than ${x}</b>.`,`SELECT name, age FROM customers WHERE age < ${x}`,{...wh,hints:h('age','age < 30')})));
+  out.push(Q('w:name:Ada','where',1,'Find Ada',`Which <b>city</b> does <b>Ada</b> live in? Return just the city.`,"SELECT city FROM customers WHERE name = 'Ada'",{...wh,hints:h('name',"name = 'Ada'")}));
+  out.push(Q('w:name:Edsger','where',1,'Find Edsger',`How <b>old</b> is <b>Edsger</b>? Return just the age.`,"SELECT age FROM customers WHERE name = 'Edsger'",{...wh,hints:h('name',"name = 'Edsger'")}));
+  out.push(Q('w:ageeq:28','where',2,'Exact age',`Show the <b>name</b> of the customer who is exactly <b>28</b>.`,'SELECT name FROM customers WHERE age = 28',{...wh,hints:h('age','age = 28')}));
+  return out;
+};
+FAMILIES['where-multi']=()=>{
+  const out=[];const rq={req:/\b(and|or)\b/i,reqMsg:'an <code>AND</code> or <code>OR</code>'};
+  [['London',30],['Tokyo',40],['New York',45],['Helsinki',25],['Boston',40]].forEach(([c,a])=>
+    out.push(Q('wm:cityage:'+c,'where-multi',2,'Two tests, both must pass',`Show the <b>name and age</b> of customers in <b>${c}</b> who are <b>older than ${a}</b>.`,`SELECT name, age FROM customers WHERE city = '${c}' AND age > ${a}`,{...rq,hints:['Both conditions must hold → join them with <code>AND</code>.',`<code>WHERE city = '${c}' AND age &gt; ${a}</code>`]})));
+  [[50,200],[20,50],[100,300]].forEach(([a,b])=>
+    out.push(Q('wm:range:'+a+'-'+b,'where-multi',3,'In a price band',`Show the <b>product and amount</b> of orders costing <b>more than ${a}</b> but <b>less than ${b}</b>.`,`SELECT product, amount FROM orders WHERE amount > ${a} AND amount < ${b}`,{...rq,hints:['Two tests on the <i>same</i> column, joined with <code>AND</code>.',`<code>WHERE amount &gt; ${a} AND amount &lt; ${b}</code>`]})));
+  [['London','Tokyo'],['Boston','Helsinki'],['New York','Boston']].forEach(([a,b])=>
+    out.push(Q('wm:or:'+a+'-'+b,'where-multi',2,'Either city works',`Show the <b>name and city</b> of customers living in <b>${a}</b> or <b>${b}</b>.`,`SELECT name, city FROM customers WHERE city = '${a}' OR city = '${b}'`,{...rq,hints:['Either condition may pass → use <code>OR</code>. Each side needs its own <code>city =</code>.',`<code>WHERE city = '${a}' OR city = '${b}'</code>`]})));
+  out.push(Q('wm:prodamt:laptop','where-multi',3,'Pricey laptops',`Show the <b>product and amount</b> of <b>Laptop</b> orders over <b>1200</b>.`,"SELECT product, amount FROM orders WHERE product = 'Laptop' AND amount > 1200",{...rq,hints:['One text test AND one number test.',"<code>WHERE product = 'Laptop' AND amount &gt; 1200</code>"]}));
+  out.push(Q('wm:prodamt:kb','where-multi',3,'Budget keyboards',`Show the <b>product and amount</b> of <b>Keyboard</b> orders under <b>60</b>.`,"SELECT product, amount FROM orders WHERE product = 'Keyboard' AND amount < 60",{...rq,hints:['Text test AND number test again.',"<code>WHERE product = 'Keyboard' AND amount &lt; 60</code>"]}));
+  out.push(Q('wm:agerange','where-multi',3,'Thirty-something-ish',`Show the <b>name and age</b> of customers older than <b>30</b> and younger than <b>50</b>.`,'SELECT name, age FROM customers WHERE age > 30 AND age < 50',{...rq,hints:['Same column, two bounds, joined with <code>AND</code>.','<code>WHERE age &gt; 30 AND age &lt; 50</code>']}));
+  out.push(Q('wm:prodor','where-multi',3,'Screens & cams',`Show the <b>product and amount</b> of every <b>Monitor</b> or <b>Webcam</b> order.`,"SELECT product, amount FROM orders WHERE product = 'Monitor' OR product = 'Webcam'",{...rq,hints:['Either product qualifies → <code>OR</code>, each side a full <code>product =</code> test.',"<code>WHERE product = 'Monitor' OR product = 'Webcam'</code>"]}));
+  out.push(Q('wm:cityagelt','where-multi',2,'Young Londoner',`Show the <b>name and age</b> of customers in <b>London</b> who are <b>under 30</b>.`,"SELECT name, age FROM customers WHERE city = 'London' AND age < 30",{...rq,hints:['City test AND age test.',"<code>WHERE city = 'London' AND age &lt; 30</code>"]}));
+  return out;
+};
+FAMILIES['order']=()=>{
+  const out=[];const rq={req:/\border\s+by\b/i,reqMsg:'an <code>ORDER BY</code>',ord:true};
+  const H=(c,d)=>['Sort with <code>ORDER BY '+c+'</code>.',d==='DESC'?'Biggest-first means <code>DESC</code>.':'Low-to-high is the default (<code>ASC</code>).'];
+  [['DESC','most expensive first'],['ASC','cheapest first']].forEach(([d,t])=>{
+    out.push(Q('o:amt:'+d+':all','order',2,'Sort the orders',`List <b>all columns</b> of every order, <b>${t}</b>.`,`SELECT * FROM orders ORDER BY amount ${d}`,{...rq,hints:H('amount',d)}));
+    out.push(Q('o:amt:'+d+':pa','order',2,'Sort the orders',`Show <b>product and amount</b> of every order, <b>${t}</b>.`,`SELECT product, amount FROM orders ORDER BY amount ${d}`,{...rq,hints:H('amount',d)}));
+  });
+  [['DESC','oldest first'],['ASC','youngest first']].forEach(([d,t])=>{
+    out.push(Q('o:age:'+d+':all','order',2,'Sort the customers',`List <b>all columns</b> of every customer, <b>${t}</b>.`,`SELECT * FROM customers ORDER BY age ${d}`,{...rq,hints:H('age',d)}));
+    out.push(Q('o:age:'+d+':na','order',2,'Sort the customers',`Show <b>name and age</b> of every customer, <b>${t}</b>.`,`SELECT name, age FROM customers ORDER BY age ${d}`,{...rq,hints:H('age',d)}));
+  });
+  out.push(Q('o:name:asc:n','order',2,'A to Z',`Show every customer's <b>name</b>, alphabetically (A→Z).`,'SELECT name FROM customers ORDER BY name',{...rq,hints:H('name','ASC')}));
+  out.push(Q('o:name:asc:nc','order',2,'A to Z, with cities',`Show <b>name and city</b> of every customer, alphabetically by name.`,'SELECT name, city FROM customers ORDER BY name',{...rq,hints:H('name','ASC')}));
+  out.push(Q('o:name:desc:n','order',2,'Z to A',`Show every customer's <b>name</b>, reverse-alphabetically (Z→A).`,'SELECT name FROM customers ORDER BY name DESC',{...rq,hints:H('name','DESC')}));
+  out.push(Q('o:amt:desc:a','order',2,'Amounts, high to low',`Show just the <b>amount</b> of every order, biggest first.`,'SELECT amount FROM orders ORDER BY amount DESC',{...rq,hints:H('amount','DESC')}));
+  return out;
+};
+FAMILIES['limit']=()=>{
+  const rq={req:/\blimit\b/i,reqMsg:'a <code>LIMIT</code>',ord:true};
+  const H=n=>['Sort first (<code>ORDER BY</code>), then keep '+n+' with <code>LIMIT '+n+'</code>.','Top-N = <code>ORDER BY … DESC LIMIT '+n+'</code>; bottom-N uses <code>ASC</code>.'];
+  return [
+    Q('l:top3','limit',2,'Top 3 spenders’ items',`Show the <b>product and amount</b> of the <b>3 most expensive</b> orders (most expensive first).`,'SELECT product, amount FROM orders ORDER BY amount DESC LIMIT 3',{...rq,hints:H(3)}),
+    Q('l:top5','limit',2,'Top 5',`Show <b>all columns</b> of the <b>5 most expensive</b> orders (most expensive first).`,'SELECT * FROM orders ORDER BY amount DESC LIMIT 5',{...rq,hints:H(5)}),
+    Q('l:top2','limit',2,'Top 2',`Show the <b>product and amount</b> of the <b>2 most expensive</b> orders (most expensive first).`,'SELECT product, amount FROM orders ORDER BY amount DESC LIMIT 2',{...rq,hints:H(2)}),
+    Q('l:cheap3','limit',3,'Bargain bin',`Show the <b>product and amount</b> of the <b>3 cheapest</b> orders (cheapest first).`,'SELECT product, amount FROM orders ORDER BY amount ASC LIMIT 3',{...rq,hints:H(3)}),
+    Q('l:cheap2','limit',3,'Two cheapest',`Show <b>all columns</b> of the <b>2 cheapest</b> orders (cheapest first).`,'SELECT * FROM orders ORDER BY amount ASC LIMIT 2',{...rq,hints:H(2)}),
+    Q('l:old3','limit',2,'Three eldest',`Show the <b>name and age</b> of the <b>3 oldest</b> customers (oldest first).`,'SELECT name, age FROM customers ORDER BY age DESC LIMIT 3',{...rq,hints:H(3)}),
+    Q('l:young3','limit',2,'Three youngest',`Show the <b>name and age</b> of the <b>3 youngest</b> customers (youngest first).`,'SELECT name, age FROM customers ORDER BY age ASC LIMIT 3',{...rq,hints:H(3)}),
+    Q('l:young2','limit',3,'Two youngest',`Show the <b>name and age</b> of the <b>2 youngest</b> customers (youngest first).`,'SELECT name, age FROM customers ORDER BY age ASC LIMIT 2',{...rq,hints:H(2)}),
+    Q('l:alpha5','limit',3,'First five, A→Z',`Show the <b>name</b> of the first <b>5</b> customers alphabetically.`,'SELECT name FROM customers ORDER BY name LIMIT 5',{...rq,hints:H(5)}),
+    Q('l:alpha3','limit',3,'First three, A→Z',`Show the <b>name</b> of the first <b>3</b> customers alphabetically.`,'SELECT name FROM customers ORDER BY name LIMIT 3',{...rq,hints:H(3)})
+  ];
+};
+FAMILIES['distinct']=()=>{
+  const rq={req:/\bdistinct\b/i,reqMsg:'a <code>DISTINCT</code>'};
+  return [
+    Q('d:city','distinct',2,'Unique cities',`List each <b>city</b> that appears in customers — <b>no duplicates</b>.`,'SELECT DISTINCT city FROM customers',{...rq,hints:['<code>DISTINCT</code> goes right after <code>SELECT</code>.','<code>SELECT DISTINCT city FROM customers</code>']}),
+    Q('d:prod','distinct',2,'Unique products',`List each <b>product</b> that has been ordered — no duplicates.`,'SELECT DISTINCT product FROM orders',{...rq,hints:['Same trick, different table and column.','<code>SELECT DISTINCT product FROM orders</code>']}),
+    Q('d:cust','distinct',3,'Who has ordered?',`List the <b>distinct customer_id</b> values in orders. (Note the NULL row!)`,'SELECT DISTINCT customer_id FROM orders',{...rq,hints:['DISTINCT keeps one copy of each value — including one NULL.','<code>SELECT DISTINCT customer_id FROM orders</code>']}),
+    Q('d:countcity','distinct',3,'How many cities?',`<b>How many different cities</b> do our customers live in? Return just the number.`,'SELECT COUNT(DISTINCT city) FROM customers',{...rq,hints:['Put DISTINCT <i>inside</i> the COUNT.','<code>SELECT COUNT(DISTINCT city) FROM customers</code>']}),
+    Q('d:countprod','distinct',3,'How many products?',`<b>How many different products</b> have been ordered? Return just the number.`,'SELECT COUNT(DISTINCT product) FROM orders',{...rq,hints:['DISTINCT inside COUNT again.','<code>SELECT COUNT(DISTINCT product) FROM orders</code>']}),
+    Q('d:countcust','distinct',3,'How many buyers?',`<b>How many different customers</b> have placed an order? Return just the number. (Careful: NULL doesn't count.)`,'SELECT COUNT(DISTINCT customer_id) FROM orders',{...rq,hints:['<code>COUNT(DISTINCT …)</code> ignores NULLs — handy here.','<code>SELECT COUNT(DISTINCT customer_id) FROM orders</code>']})
+  ];
+};
+FAMILIES['aggregate']=()=>{
+  const out=[];const fn=f=>({req:new RegExp('\\b'+f+'\\s*\\(','i'),reqMsg:'the <code>'+f.toUpperCase()+'()</code> function'});
+  const H1='Aggregates return ONE number from many rows.';
+  out.push(Q('a:count:cust','aggregate',1,'Head count',`<b>How many customers</b> are there? Return just the number.`,'SELECT COUNT(*) FROM customers',{...fn('count'),hints:[H1,'<code>SELECT COUNT(*) FROM customers</code>']}));
+  out.push(Q('a:count:ord','aggregate',1,'Order count',`<b>How many orders</b> are there? Return just the number.`,'SELECT COUNT(*) FROM orders',{...fn('count'),hints:[H1,'<code>SELECT COUNT(*) FROM orders</code>']}));
+  [['amtgt100','orders cost <b>more than 100</b>','SELECT COUNT(*) FROM orders WHERE amount > 100'],
+   ['london','customers live in <b>London</b>',"SELECT COUNT(*) FROM customers WHERE city = 'London'"],
+   ['agegt40','customers are <b>older than 40</b>','SELECT COUNT(*) FROM customers WHERE age > 40'],
+   ['laptop','<b>Laptop</b> orders exist',"SELECT COUNT(*) FROM orders WHERE product = 'Laptop'"],
+   ['amtlt30','orders cost <b>less than 30</b>','SELECT COUNT(*) FROM orders WHERE amount < 30']
+  ].forEach(([k,txt,sol])=>out.push(Q('a:countw:'+k,'aggregate',2,'Count with a filter',`<b>How many</b> ${txt}? Return just the number.`,sol,{...fn('count'),hints:['COUNT the rows that survive a WHERE.','Pattern: <code>SELECT COUNT(*) FROM … WHERE …</code>']})));
+  ['New York','Helsinki','Boston','Tokyo'].forEach(c=>out.push(Q('a:countcity:'+c,'aggregate',2,'City head-count',`<b>How many customers</b> live in <b>${c}</b>? Return just the number.`,`SELECT COUNT(*) FROM customers WHERE city = '${c}'`,{...fn('count'),hints:['COUNT + WHERE on the city column.',`<code>WHERE city = '${c}'</code>`]})));
+  out.push(Q('a:sum:all','aggregate',2,'Total takings',`What is the <b>total amount</b> across all orders? Return just the number.`,'SELECT SUM(amount) FROM orders',{...fn('sum'),hints:['Adding up a column is <code>SUM(column)</code>.','<code>SELECT SUM(amount) FROM orders</code>']}));
+  out.push(Q('a:sum:laptop','aggregate',3,'Laptop revenue',`What is the <b>total amount</b> of all <b>Laptop</b> orders?`,"SELECT SUM(amount) FROM orders WHERE product = 'Laptop'",{...fn('sum'),hints:['SUM the rows that survive a WHERE.',"<code>SUM(amount) … WHERE product = 'Laptop'</code>"]}));
+  out.push(Q('a:sum:gt1000','aggregate',3,'Big-ticket total',`What is the <b>total amount</b> of orders over <b>1000</b>?`,'SELECT SUM(amount) FROM orders WHERE amount > 1000',{...fn('sum'),hints:['SUM + WHERE on the same column is fine.','<code>SUM(amount) … WHERE amount &gt; 1000</code>']}));
+  out.push(Q('a:sum:lt50','aggregate',3,'Small-stuff total',`What is the <b>total amount</b> of orders under <b>50</b>?`,'SELECT SUM(amount) FROM orders WHERE amount < 50',{...fn('sum'),hints:['Same shape as the last one.','<code>SUM(amount) … WHERE amount &lt; 50</code>']}));
+  out.push(Q('a:avg:amt','aggregate',2,'Typical order',`What is the <b>average amount</b> of an order? (Decimals are fine.)`,'SELECT AVG(amount) FROM orders',{...fn('avg'),hints:['Averages use <code>AVG(column)</code>.','<code>SELECT AVG(amount) FROM orders</code>']}));
+  out.push(Q('a:avg:age','aggregate',2,'Average age',`What is the <b>average age</b> of our customers? (Decimals are fine.)`,'SELECT AVG(age) FROM customers',{...fn('avg'),hints:['Same function, other table.','<code>SELECT AVG(age) FROM customers</code>']}));
+  out.push(Q('a:avg:kb','aggregate',3,'Keyboard price point',`What is the <b>average amount</b> of a <b>Keyboard</b> order?`,"SELECT AVG(amount) FROM orders WHERE product = 'Keyboard'",{...fn('avg'),hints:['AVG over a filtered set.',"<code>AVG(amount) … WHERE product = 'Keyboard'</code>"]}));
+  out.push(Q('a:avg:londonage','aggregate',3,'London average age',`What is the <b>average age</b> of customers in <b>London</b>?`,"SELECT AVG(age) FROM customers WHERE city = 'London'",{...fn('avg'),hints:['AVG + WHERE city.',"<code>AVG(age) … WHERE city = 'London'</code>"]}));
+  out.push(Q('a:min:amt','aggregate',2,'Cheapest order',`What is the <b>smallest amount</b> in orders? Return just the number.`,'SELECT MIN(amount) FROM orders',{...fn('min'),hints:['Smallest = <code>MIN(column)</code>.','<code>SELECT MIN(amount) FROM orders</code>']}));
+  out.push(Q('a:max:amt','aggregate',2,'Priciest order',`What is the <b>largest amount</b> in orders? Return just the number.`,'SELECT MAX(amount) FROM orders',{...fn('max'),hints:['Largest = <code>MAX(column)</code>.','<code>SELECT MAX(amount) FROM orders</code>']}));
+  out.push(Q('a:min:age','aggregate',2,'Youngest',`What is the <b>lowest age</b> among customers?`,'SELECT MIN(age) FROM customers',{...fn('min'),hints:['MIN on the age column.','<code>SELECT MIN(age) FROM customers</code>']}));
+  out.push(Q('a:max:age','aggregate',2,'Eldest',`What is the <b>highest age</b> among customers?`,'SELECT MAX(age) FROM customers',{...fn('max'),hints:['MAX on the age column.','<code>SELECT MAX(age) FROM customers</code>']}));
+  out.push(Q('a:max:monitor','aggregate',3,'Top monitor price',`What is the <b>highest amount</b> paid for a <b>Monitor</b>?`,"SELECT MAX(amount) FROM orders WHERE product = 'Monitor'",{...fn('max'),hints:['MAX over a filtered set.',"<code>MAX(amount) … WHERE product = 'Monitor'</code>"]}));
+  out.push(Q('a:min:tokyoage','aggregate',3,'Youngest in Tokyo',`What is the <b>lowest age</b> among <b>Tokyo</b> customers?`,"SELECT MIN(age) FROM customers WHERE city = 'Tokyo'",{...fn('min'),hints:['MIN + WHERE city.',"<code>MIN(age) … WHERE city = 'Tokyo'</code>"]}));
+  out.push(Q('a:max:under100','aggregate',3,'Best under 100',`What is the <b>highest amount under 100</b> in orders?`,'SELECT MAX(amount) FROM orders WHERE amount < 100',{...fn('max'),hints:['MAX of the rows WHERE amount &lt; 100.','<code>MAX(amount) … WHERE amount &lt; 100</code>']}));
+  return out;
+};
+FAMILIES['group']=()=>{
+  const out=[];const rq={req:/\bgroup\s+by\b/i,reqMsg:'a <code>GROUP BY</code>'};
+  const H=['One row per group: SELECT the group column + an aggregate, then <code>GROUP BY</code> that column.','Pattern: <code>SELECT col, AGG(…) FROM … GROUP BY col</code>'];
+  [['count','COUNT(*)','how many customers live there'],['avgage','AVG(age)','their average age'],['maxage','MAX(age)','the age of the eldest'],['minage','MIN(age)','the age of the youngest']]
+    .forEach(([k,agg,txt])=>out.push(Q('g:city:'+k,'group',3,'Per city',`For each <b>city</b>, show the city and <b>${txt}</b>.`,`SELECT city, ${agg} FROM customers GROUP BY city`,{...rq,hints:H})));
+  [['count','COUNT(*)','how many orders they placed'],['sum','SUM(amount)','their total spend'],['avg','AVG(amount)','their average order'],['max','MAX(amount)','their biggest order']]
+    .forEach(([k,agg,txt])=>out.push(Q('g:cust:'+k,'group',3,'Per customer id',`For each <b>customer_id</b> in orders, show the id and <b>${txt}</b>. (Yes, NULL gets a row.)`,`SELECT customer_id, ${agg} FROM orders GROUP BY customer_id`,{...rq,hints:H})));
+  [['count','COUNT(*)','how many times it was ordered'],['sum','SUM(amount)','its total sales'],['avg','AVG(amount)','its average price'],['max','MAX(amount)','its highest price'],['min','MIN(amount)','its lowest price']]
+    .forEach(([k,agg,txt])=>out.push(Q('g:prod:'+k,'group',3,'Per product',`For each <b>product</b>, show the product and <b>${txt}</b>.`,`SELECT product, ${agg} FROM orders GROUP BY product`,{...rq,hints:H})));
+  out.push(Q('g:prodsum:desc','group',4,'Best sellers',`For each <b>product</b>, show product and <b>total sales</b> — sorted biggest total first.`,'SELECT product, SUM(amount) FROM orders GROUP BY product ORDER BY SUM(amount) DESC',{...rq,ord:true,hints:['Group first, then ORDER BY the aggregate.','You can sort by <code>SUM(amount) DESC</code> directly (or alias it with AS).']}));
+  out.push(Q('g:custsum:desc','group',4,'Spend league',`For each <b>customer_id</b>, show id and <b>total spend</b> — biggest first.`,'SELECT customer_id, SUM(amount) FROM orders GROUP BY customer_id ORDER BY SUM(amount) DESC',{...rq,ord:true,hints:['Same as before, grouped by customer_id.','<code>… GROUP BY customer_id ORDER BY SUM(amount) DESC</code>']}));
+  out.push(Q('g:prodmax:desc','group',4,'Premium list',`For each <b>product</b>, show product and its <b>highest price</b> — highest first.`,'SELECT product, MAX(amount) FROM orders GROUP BY product ORDER BY MAX(amount) DESC',{...rq,ord:true,hints:['Group by product, order by the MAX.','<code>… ORDER BY MAX(amount) DESC</code>']}));
+  out.push(Q('g:prodcount:w100','group',4,'Premium tally',`Counting only orders <b>over 100</b>: for each <b>product</b>, show product and the count.`,'SELECT product, COUNT(*) FROM orders WHERE amount > 100 GROUP BY product',{...rq,hints:['WHERE filters rows <i>before</i> grouping.','<code>… WHERE amount &gt; 100 GROUP BY product</code>']}));
+  out.push(Q('g:custsum:w100','group',4,'Big-ticket spenders',`Counting only orders <b>over 100</b>: for each <b>customer_id</b>, show id and their <b>total</b>.`,'SELECT customer_id, SUM(amount) FROM orders WHERE amount > 100 GROUP BY customer_id',{...rq,hints:['WHERE before GROUP BY again.','<code>… WHERE amount &gt; 100 GROUP BY customer_id</code>']}));
+  return out;
+};
+FAMILIES['having']=()=>{
+  const rq={req:/\bhaving\b/i,reqMsg:'a <code>HAVING</code> clause'};
+  const H=['Filter the GROUPS after grouping → <code>HAVING</code>, not WHERE.','Pattern: <code>GROUP BY col HAVING AGG(…) &gt; n</code>'];
+  return [
+    Q('h:city:gt2','having',4,'Busy cities',`Show each <b>city</b> with <b>more than 2</b> customers — city and the count.`,'SELECT city, COUNT(*) FROM customers GROUP BY city HAVING COUNT(*) > 2',{...rq,hints:H}),
+    Q('h:prod:gt2','having',4,'Popular products',`Show each <b>product</b> ordered <b>more than twice</b> — product and the count.`,'SELECT product, COUNT(*) FROM orders GROUP BY product HAVING COUNT(*) > 2',{...rq,hints:H}),
+    Q('h:prodsum:200','having',4,'Real earners',`Show each <b>product</b> whose <b>total sales exceed 200</b> — product and the total.`,'SELECT product, SUM(amount) FROM orders GROUP BY product HAVING SUM(amount) > 200',{...rq,hints:H}),
+    Q('h:prodsum:500','having',4,'Big earners only',`Show each <b>product</b> whose <b>total sales exceed 500</b> — product and the total.`,'SELECT product, SUM(amount) FROM orders GROUP BY product HAVING SUM(amount) > 500',{...rq,hints:H}),
+    Q('h:prodavg:100','having',4,'Premium products',`Show each <b>product</b> whose <b>average price is over 100</b> — product and the average.`,'SELECT product, AVG(amount) FROM orders GROUP BY product HAVING AVG(amount) > 100',{...rq,hints:H}),
+    Q('h:cust:gt2','having',4,'Frequent buyers',`Show each <b>customer_id</b> with <b>more than 2</b> orders — id and the count.`,'SELECT customer_id, COUNT(*) FROM orders GROUP BY customer_id HAVING COUNT(*) > 2',{...rq,hints:H}),
+    Q('h:custsum:300','having',4,'Heavy spenders',`Show each <b>customer_id</b> whose <b>total spend exceeds 300</b> — id and the total.`,'SELECT customer_id, SUM(amount) FROM orders GROUP BY customer_id HAVING SUM(amount) > 300',{...rq,hints:H}),
+    Q('h:cityavg:44','having',4,'Senior cities',`Show each <b>city</b> whose customers' <b>average age is over 44</b> — city and the average.`,'SELECT city, AVG(age) FROM customers GROUP BY city HAVING AVG(age) > 44',{...rq,hints:H}),
+    Q('h:prodmax:200','having',4,'Has a premium tier',`Show each <b>product</b> whose <b>highest price is over 200</b> — product and that max.`,'SELECT product, MAX(amount) FROM orders GROUP BY product HAVING MAX(amount) > 200',{...rq,hints:H}),
+    Q('h:cityavg:40','having',4,'Forty-plus cities',`Show each <b>city</b> whose customers' <b>average age is over 40</b> — city and the average.`,'SELECT city, AVG(age) FROM customers GROUP BY city HAVING AVG(age) > 40',{...rq,hints:H})
+  ];
+};
+FAMILIES['inner-join']=()=>{
+  const out=[];const rq={req:/\bjoin\b/i,reqMsg:'a <code>JOIN</code>'};
+  const ON='ON customers.id = orders.customer_id';
+  const H=['Two tables → <code>FROM customers JOIN orders ON …</code> — the ON pairs each order with its customer.','The link: <code>'+'ON customers.id = orders.customer_id</code>. Prefix columns with their table.'];
+  [[['name','product'],3],[['name','amount'],3],[['city','product'],3],[['name','product','amount'],3],[['city','amount'],3],[['name','city','product'],3]].forEach(([cols,lv])=>{
+    const sel=cols.map(c=>(c==='product'||c==='amount')?'orders.'+c:'customers.'+c).join(', ');
+    out.push(Q('ij:proj:'+cols.join(','),'inner-join',lv,'Stitch the tables',`For every <b>matched</b> order, show ${fmtCols(cols)} (in that order).`,`SELECT ${sel} FROM customers JOIN orders ${ON}`,{...rq,hints:H}));
+  });
+  ['Laptop','Keyboard','Monitor','Headphones','Mouse'].forEach(p=>out.push(Q('ij:who:'+p,'inner-join',3,'Who bought it?',`Show the <b>name</b> of everyone who bought a <b>${p}</b>.`,`SELECT customers.name FROM customers JOIN orders ${ON} WHERE orders.product = '${p}'`,{...rq,hints:['Join first, then WHERE on the product.',`<code>… ${ON} WHERE product = '${p}'</code>`]})));
+  ['London','Tokyo','New York','Helsinki'].forEach(c=>out.push(Q('ij:city:'+c,'inner-join',3,'City basket',`Show every <b>product</b> bought by customers in <b>${c}</b>.`,`SELECT orders.product FROM customers JOIN orders ${ON} WHERE customers.city = '${c}'`,{...rq,hints:['Join, then filter on the customers side.',`<code>WHERE customers.city = '${c}'</code>`]})));
+  [['gt100','over <b>100</b>','WHERE orders.amount > 100'],['gt1000','over <b>1000</b>','WHERE orders.amount > 1000'],['lt30','under <b>30</b>','WHERE orders.amount < 30']].forEach(([k,txt,w])=>
+    out.push(Q('ij:amt:'+k,'inner-join',4,'Joined + filtered',`For matched orders ${txt}, show <b>name, product and amount</b> (in that order).`,`SELECT customers.name, orders.product, orders.amount FROM customers JOIN orders ${ON} ${w}`,{...rq,hints:['Join, then a numeric WHERE on orders.amount.','<code>'+w+'</code>']})));
+  [['desc','most expensive first','DESC'],['asc','cheapest first','ASC']].forEach(([k,txt,d])=>
+    out.push(Q('ij:ord:'+k,'inner-join',4,'Joined + sorted',`For every matched order, show <b>name, product and amount</b>, sorted by amount — ${txt}.`,`SELECT customers.name, orders.product, orders.amount FROM customers JOIN orders ${ON} ORDER BY orders.amount ${d}`,{...rq,ord:true,hints:['Join, then ORDER BY orders.amount.','Add <code>'+d+'</code> for the direction.']})));
+  out.push(Q('ij:age:gt40','inner-join',4,'Senior shoppers',`Show <b>name and product</b> for orders made by customers <b>older than 40</b>.`,`SELECT customers.name, orders.product FROM customers JOIN orders ${ON} WHERE customers.age > 40`,{...rq,hints:['Filter on the customers side after joining.','<code>WHERE customers.age &gt; 40</code>']}));
+  out.push(Q('ij:age:lt30','inner-join',4,'Young shoppers',`Show <b>name and product</b> for orders made by customers <b>under 30</b>.`,`SELECT customers.name, orders.product FROM customers JOIN orders ${ON} WHERE customers.age < 30`,{...rq,hints:['Same shape, flipped comparison.','<code>WHERE customers.age &lt; 30</code>']}));
+  out.push(Q('ij:laptop1200','inner-join',4,'Top-end laptop buyer',`Who bought a <b>Laptop over 1200</b>? Show <b>name and amount</b>.`,`SELECT customers.name, orders.amount FROM customers JOIN orders ${ON} WHERE orders.product = 'Laptop' AND orders.amount > 1200`,{...rq,hints:['Join + two ANDed conditions.',"<code>WHERE product = 'Laptop' AND amount &gt; 1200</code>"]}));
+  out.push(Q('ij:london100','inner-join',4,'London big spends',`Show <b>name, product and amount</b> for <b>London</b> orders <b>over 100</b>.`,`SELECT customers.name, orders.product, orders.amount FROM customers JOIN orders ${ON} WHERE customers.city = 'London' AND orders.amount > 100`,{...rq,hints:['One condition per side of the join, ANDed.',"<code>WHERE city = 'London' AND amount &gt; 100</code>"]}));
+  return out;
+};
+FAMILIES['left-join']=()=>{
+  const out=[];const rq={req:/\bleft\b/i,reqMsg:'a <code>LEFT JOIN</code>'};
+  const ON='ON customers.id = orders.customer_id';
+  const HK=['LEFT JOIN keeps every row of the table after FROM.','<code>FROM customers LEFT JOIN orders '+ON+'</code>'];
+  [[['name','product']],[['name','amount']],[['name','product','amount']],[['city','product']]].forEach(([cols])=>{
+    const sel=cols.map(c=>(c==='product'||c==='amount')?'orders.'+c:'customers.'+c).join(', ');
+    out.push(Q('lj:proj:'+cols.join(','),'left-join',4,'Keep every customer',`Show ${fmtCols(cols)} for <b>every customer</b> — including the quiet ones (their order columns will be NULL).`,`SELECT ${sel} FROM customers LEFT JOIN orders ${ON}`,{...rq,hints:HK}));
+  });
+  [[['name'],'just their <b>name</b>'],[['name','age'],'their <b>name and age</b>'],[['name','city'],'their <b>name and city</b>']].forEach(([cols,txt])=>{
+    out.push(Q('lj:quiet:'+cols.join(','),'left-join',4,'The quiet ones',`Find the customers with <b>no orders</b> — show ${txt}. (LEFT JOIN, then keep rows where the order side IS NULL.)`,`SELECT ${cols.map(c=>'customers.'+c).join(', ')} FROM customers LEFT JOIN orders ${ON} WHERE orders.id IS NULL`,{...rq,hints:['After a LEFT JOIN, no-match rows have NULL in every orders column.','Filter them with <code>WHERE orders.id IS NULL</code> (IS, not =).']}));
+  });
+  out.push(Q('lj:tokyo:np','left-join',4,'Tokyo, everyone',`Show <b>name and product</b> for every <b>Tokyo</b> customer — including any with no orders.`,`SELECT customers.name, orders.product FROM customers LEFT JOIN orders ${ON} WHERE customers.city = 'Tokyo'`,{...rq,hints:['LEFT JOIN keeps Barbara even though she never ordered.',"<code>WHERE customers.city = 'Tokyo'</code> — the NULL row survives because the filter is on the customers side."]}));
+  out.push(Q('lj:tokyo:na','left-join',4,'Tokyo amounts',`Show <b>name and amount</b> for every <b>Tokyo</b> customer — including any with no orders.`,`SELECT customers.name, orders.amount FROM customers LEFT JOIN orders ${ON} WHERE customers.city = 'Tokyo'`,{...rq,hints:['Same as before with a different orders column.',"<code>WHERE customers.city = 'Tokyo'</code>"]}));
+  out.push(Q('lj:quiet35','left-join',5,'Quiet and over 35',`Find customers with <b>no orders</b> who are <b>older than 35</b> — show <b>name and age</b>.`,`SELECT customers.name, customers.age FROM customers LEFT JOIN orders ${ON} WHERE orders.id IS NULL AND customers.age > 35`,{...rq,hints:['Combine the IS NULL trick with a normal condition using AND.','<code>WHERE orders.id IS NULL AND customers.age &gt; 35</code>']}));
+  out.push(Q('lj:orders:pn','left-join',5,'Keep every order',`Show every order's <b>product</b> and buyer <b>name</b> — keeping the two orphan orders (NULL name). Which table must be on the left?`,`SELECT orders.product, customers.name FROM orders LEFT JOIN customers ON customers.id = orders.customer_id`,{...rq,hints:['LEFT keeps the table after FROM — so start FROM orders this time.','<code>FROM orders LEFT JOIN customers ON customers.id = orders.customer_id</code>']}));
+  out.push(Q('lj:orders:pan','left-join',5,'Orders ledger',`Show <b>product, amount and buyer name</b> for every order — orphans included (NULL name).`,`SELECT orders.product, orders.amount, customers.name FROM orders LEFT JOIN customers ON customers.id = orders.customer_id`,{...rq,hints:['Same flip: FROM orders LEFT JOIN customers.','Columns in order: product, amount, name.']}));
+  out.push(Q('lj:orphans','left-join',5,'The orphans',`Find the orders with <b>no customer</b> — show <b>product and amount</b>. (LEFT JOIN from orders + IS NULL.)`,`SELECT orders.product, orders.amount FROM orders LEFT JOIN customers ON customers.id = orders.customer_id WHERE customers.id IS NULL`,{...rq,hints:['Flip the tables, then the IS NULL trick on the customers side.','<code>WHERE customers.id IS NULL</code>']}));
+  out.push(Q('lj:prodnull','left-join',4,'No product at all',`Show the <b>name</b> of customers whose joined <b>product IS NULL</b> (i.e. they never ordered).`,`SELECT customers.name FROM customers LEFT JOIN orders ${ON} WHERE orders.product IS NULL`,{...rq,hints:['Any orders-side column works for the NULL test.','<code>WHERE orders.product IS NULL</code>']}));
+  return out;
+};
+FAMILIES['full-join']=()=>{
+  const rq={req:/\bfull\b/i,reqMsg:'a <code>FULL JOIN</code>'};
+  const ON='ON customers.id = orders.customer_id';
+  const H=['FULL JOIN = LEFT and RIGHT at once: nothing is dropped on either side.','<code>FROM customers FULL JOIN orders '+ON+'</code>'];
+  return [
+    Q('fj:np','full-join',4,'Absolutely everyone',`Show every <b>name</b> and every <b>product</b> — quiet customers AND orphan orders included.`,`SELECT customers.name, orders.product FROM customers FULL JOIN orders ${ON}`,{...rq,hints:H}),
+    Q('fj:npa','full-join',4,'The full ledger',`Show <b>name, product and amount</b> for everything — nothing dropped on either side.`,`SELECT customers.name, orders.product, orders.amount FROM customers FULL JOIN orders ${ON}`,{...rq,hints:H}),
+    Q('fj:cp','full-join',4,'Cities and products',`Show <b>city and product</b> for everything — both unmatched sides included.`,`SELECT customers.city, orders.product FROM customers FULL JOIN orders ${ON}`,{...rq,hints:H}),
+    Q('fj:na','full-join',4,'Names and amounts',`Show <b>name and amount</b> for everything — both unmatched sides included.`,`SELECT customers.name, orders.amount FROM customers FULL JOIN orders ${ON}`,{...rq,hints:H}),
+    Q('fj:unmatched','full-join',5,'Only the lonely',`Show only the <b>unmatched</b> rows from both sides — <b>name and product</b>. (Quiet customers and orphan orders.)`,`SELECT customers.name, orders.product FROM customers FULL JOIN orders ${ON} WHERE customers.id IS NULL OR orders.id IS NULL`,{...rq,hints:['After a FULL JOIN, unmatched rows have NULL on one side.','<code>WHERE customers.id IS NULL OR orders.id IS NULL</code>']}),
+    Q('fj:orphans','full-join',5,'Orphans via FULL',`Using a FULL JOIN, show the <b>product and amount</b> of the orders with <b>no customer</b>.`,`SELECT orders.product, orders.amount FROM customers FULL JOIN orders ${ON} WHERE customers.id IS NULL`,{...rq,hints:['Orphan orders are the rows where the customers side is NULL.','<code>WHERE customers.id IS NULL</code>']}),
+    Q('fj:quiet','full-join',4,'Quiet via FULL',`Using a FULL JOIN, show the <b>name</b> of customers with <b>no orders</b>.`,`SELECT customers.name FROM customers FULL JOIN orders ${ON} WHERE orders.id IS NULL`,{...rq,hints:['Quiet customers are rows where the orders side is NULL.','<code>WHERE orders.id IS NULL</code>']}),
+    Q('fj:ncp','full-join',4,'Everything, three ways',`Show <b>name, city and product</b> for everything — both unmatched sides included.`,`SELECT customers.name, customers.city, orders.product FROM customers FULL JOIN orders ${ON}`,{...rq,hints:H})
+  ];
+};
+FAMILIES['join-group']=()=>{
+  const out=[];const ON='ON customers.id = orders.customer_id';
+  const rqL={req:/\bleft\b[\s\S]*\bgroup\s+by\b/i,reqMsg:'a <code>LEFT JOIN</code> plus <code>GROUP BY</code>'};
+  const rqJ={req:/\bjoin\b[\s\S]*\bgroup\s+by\b/i,reqMsg:'a <code>JOIN</code> plus <code>GROUP BY</code>'};
+  out.push(Q('jg:left:count','join-group',5,'Orders per customer (zeros too)',`For <b>every</b> customer (quiet ones included), show <b>name</b> and their <b>number of orders</b> — which must be <b>0</b> for the quiet ones. ⚠️ <code>COUNT(orders.id)</code>, not COUNT(*).`,`SELECT customers.name, COUNT(orders.id) FROM customers LEFT JOIN orders ${ON} GROUP BY customers.id`,{...rqL,hints:['LEFT JOIN keeps the quiet customers; COUNT(orders.id) ignores their NULL rows.','<code>SELECT name, COUNT(orders.id) … LEFT JOIN … GROUP BY customers.id</code>']}));
+  out.push(Q('jg:left:sum','join-group',4,'Spend per customer (everyone)',`For <b>every</b> customer, show <b>name</b> and their <b>total spend</b> (NULL for the quiet ones is fine).`,`SELECT customers.name, SUM(orders.amount) FROM customers LEFT JOIN orders ${ON} GROUP BY customers.id`,{...rqL,hints:['LEFT JOIN, then SUM per customer.','<code>GROUP BY customers.id</code> keeps one row per person.']}));
+  out.push(Q('jg:left:max','join-group',4,'Biggest order each',`For <b>every</b> customer, show <b>name</b> and their <b>largest order</b> (NULL if none).`,`SELECT customers.name, MAX(orders.amount) FROM customers LEFT JOIN orders ${ON} GROUP BY customers.id`,{...rqL,hints:['Same skeleton, MAX instead of SUM.','<code>MAX(orders.amount)</code>']}));
+  out.push(Q('jg:left:avg','join-group',4,'Average order each',`For <b>every</b> customer, show <b>name</b> and their <b>average order</b> (NULL if none).`,`SELECT customers.name, AVG(orders.amount) FROM customers LEFT JOIN orders ${ON} GROUP BY customers.id`,{...rqL,hints:['Same skeleton, AVG.','<code>AVG(orders.amount)</code>']}));
+  [['count','COUNT(*)','number of orders'],['sum','SUM(orders.amount)','total spend'],['avg','AVG(orders.amount)','average order'],['max','MAX(orders.amount)','biggest order']].forEach(([k,agg,txt])=>
+    out.push(Q('jg:inner:'+k,'join-group',4,'Buyers only',`For customers <b>who have ordered</b>, show <b>name</b> and their <b>${txt}</b>.`,`SELECT customers.name, ${agg} FROM customers JOIN orders ${ON} GROUP BY customers.id`,{...rqJ,hints:['A plain JOIN drops the quiet customers — exactly what we want here.','<code>GROUP BY customers.id</code>, aggregate '+agg+'.']})));
+  [['count','COUNT(*)','number of orders placed by its customers'],['sum','SUM(orders.amount)','total its customers spent'],['avg','AVG(orders.amount)','average order value'],['max','MAX(orders.amount)','biggest single order']].forEach(([k,agg,txt])=>
+    out.push(Q('jg:city:'+k,'join-group',4,'Per city',`For each <b>city with purchases</b>, show the city and the <b>${txt}</b>.`,`SELECT customers.city, ${agg} FROM customers JOIN orders ${ON} GROUP BY customers.city`,{...rqJ,hints:['Join, then group by the customers.city column.','<code>GROUP BY customers.city</code>']})));
+  out.push(Q('jg:topspender','join-group',5,'The whale',`Who spent the most overall? Show the single top spender's <b>name and total</b>.`,`SELECT customers.name, SUM(orders.amount) FROM customers JOIN orders ${ON} GROUP BY customers.id ORDER BY SUM(orders.amount) DESC LIMIT 1`,{...rqJ,ord:true,hints:['Group per customer, sort by the SUM descending, keep 1.','<code>ORDER BY SUM(orders.amount) DESC LIMIT 1</code>']}));
+  out.push(Q('jg:topcity','join-group',5,'Top city',`Which city generated the most revenue? Show that one city's <b>name and total</b>.`,`SELECT customers.city, SUM(orders.amount) FROM customers JOIN orders ${ON} GROUP BY customers.city ORDER BY SUM(orders.amount) DESC LIMIT 1`,{...rqJ,ord:true,hints:['Same trick, grouped by city.','<code>… GROUP BY customers.city ORDER BY SUM(…) DESC LIMIT 1</code>']}));
+  out.push(Q('jg:citycount:desc','join-group',5,'Cities by activity',`For each city with purchases, show <b>city and order count</b> — most active city first.`,`SELECT customers.city, COUNT(*) FROM customers JOIN orders ${ON} GROUP BY customers.city ORDER BY COUNT(*) DESC`,{...rqJ,ord:true,hints:['Group by city, order by the COUNT.','<code>ORDER BY COUNT(*) DESC</code>']}));
+  out.push(Q('jg:namesum:desc','join-group',5,'Spend leaderboard',`For customers who have ordered, show <b>name and total spend</b> — biggest first.`,`SELECT customers.name, SUM(orders.amount) FROM customers JOIN orders ${ON} GROUP BY customers.id ORDER BY SUM(orders.amount) DESC`,{...rqJ,ord:true,hints:['Inner join (buyers only), then sort the sums.','<code>ORDER BY SUM(orders.amount) DESC</code>']}));
+  out.push(Q('jg:having:city5','join-group',5,'Five-plus cities',`Show each <b>city</b> with <b>more than 5</b> orders — city and the count.`,`SELECT customers.city, COUNT(*) FROM customers JOIN orders ${ON} GROUP BY customers.city HAVING COUNT(*) > 5`,{...rqJ,hints:['Join, group, then HAVING on the count.','<code>HAVING COUNT(*) &gt; 5</code>']}));
+  out.push(Q('jg:having:sum300','join-group',5,'300 club',`Show the <b>name and total</b> of customers whose total spend is <b>over 300</b>.`,`SELECT customers.name, SUM(orders.amount) FROM customers JOIN orders ${ON} GROUP BY customers.id HAVING SUM(orders.amount) > 300`,{...rqJ,hints:['Group per customer, HAVING on the SUM.','<code>HAVING SUM(orders.amount) &gt; 300</code>']}));
+  out.push(Q('jg:where:city100','join-group',5,'Premium orders per city',`Counting only orders <b>over 100</b>: show each city and its count of such orders.`,`SELECT customers.city, COUNT(*) FROM customers JOIN orders ${ON} WHERE orders.amount > 100 GROUP BY customers.city`,{...rqJ,hints:['WHERE filters before grouping.','<code>WHERE orders.amount &gt; 100 GROUP BY customers.city</code>']}));
+  out.push(Q('jg:where:senior','join-group',5,'Senior spend',`For customers <b>older than 40</b> who ordered, show <b>name and total spend</b>.`,`SELECT customers.name, SUM(orders.amount) FROM customers JOIN orders ${ON} WHERE customers.age > 40 GROUP BY customers.id`,{...rqJ,hints:['WHERE on the customers side, then group.','<code>WHERE customers.age &gt; 40 … GROUP BY customers.id</code>']}));
+  out.push(Q('jg:where:small','join-group',5,'Small-order tally',`Counting only orders <b>under 100</b>: show each buyer's <b>name and count</b> of such orders.`,`SELECT customers.name, COUNT(*) FROM customers JOIN orders ${ON} WHERE orders.amount < 100 GROUP BY customers.id`,{...rqJ,hints:['WHERE before GROUP BY.','<code>WHERE orders.amount &lt; 100</code>']}));
+  out.push(Q('jg:laptopcities','join-group',5,'Laptop map',`For each city where a <b>Laptop</b> was bought, show the <b>city and how many</b>.`,`SELECT customers.city, COUNT(*) FROM customers JOIN orders ${ON} WHERE orders.product = 'Laptop' GROUP BY customers.city`,{...rqJ,hints:['Filter to Laptops first, then group by city.',"<code>WHERE orders.product = 'Laptop' GROUP BY customers.city</code>"]}));
+  return out;
+};
+
+/* ---------------- Build the bank: exactly 200 ---------------- */
+const QUESTIONS=[];
+CONCEPT_ORDER.forEach((cid,ci)=>{
+  const pool=FAMILIES[cid]();
+  seededShuffle(pool,0xC0FFEE+ci);
+  pool.slice(0,QUOTA[cid]).forEach(q=>QUESTIONS.push(q));
+});
+QUESTIONS.forEach((q,i)=>{ q.num=i+1; q.hints=[...q.hints,'Full answer: <code>'+q.solution.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</code>']; });
+const QBYID={}; QUESTIONS.forEach(q=>QBYID[q.id]=q);
+const QBYCONCEPT={}; CONCEPT_ORDER.forEach(c=>QBYCONCEPT[c]=QUESTIONS.filter(q=>q.concept===c));
+console.assert(QUESTIONS.length===200,'bank size',QUESTIONS.length);
+
+/* ---------------- Persistent state (v2) ---------------- */
+const SAVE_KEY='querious.v2';
+const defaultState=()=>({v:2,tick:0,focus:null,lastQid:null,totalSolved:0,
+  mastery:{},solved:{},servedAt:{},tutsSeen:{},seenIntro:false,finished:false});
+let state=load();
+function load(){
+  try{const s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s&&s.v===2)return Object.assign(defaultState(),s);}catch(e){}
+  const st=defaultState();
+  try{ // migrate v1: solved lessons seed the matching skill + skip its walkthrough
+    const v1=JSON.parse(localStorage.getItem('querious.v1'));
+    if(v1&&v1.lessons){
+      const map={'select-all':'select','pick-cols':'columns','where':'where','order':'order','count':'aggregate','groupby':'group','inner-join':'inner-join','left-join':'left-join','full-join':'full-join','final':'join-group'};
+      for(const lid in v1.lessons){ if(v1.lessons[lid].solved&&map[lid]){ st.tutsSeen[map[lid]]=true; st.mastery[map[lid]]={m:0.5,n:1,last:0}; } }
+      localStorage.removeItem('querious.v1');
+    }
+  }catch(e){}
+  return st;
+}
+function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}}
+
+/* ---------------- Learner model ---------------- */
+function mstat(cid){return state.mastery[cid]||(state.mastery[cid]={m:0,n:0,last:0});}
+function mastery(cid){return mstat(cid).m;}
+function unlocked(cid){return PREREQ[cid].every(p=>{const s=mstat(p);return s.m>=0.45||s.n>=2;});}
+function unlockedList(){return CONCEPT_ORDER.filter(unlocked);}
+function skillPct(){const t=CONCEPT_ORDER.reduce((a,c)=>a+mastery(c),0);return Math.round(t/CONCEPT_ORDER.length*100);}
+function updateMastery(cid,score,alpha){
+  const s=mstat(cid); alpha=alpha==null?0.3:alpha;
+  s.m=Math.max(0,Math.min(1,s.m+alpha*(score-s.m))); s.n++; s.last=state.tick;
+}
+function qualityOf(T){
+  if(T.revealed)return 0.15;
+  if(T.hints>=2)return 0.5;
+  if(T.hints===1)return 0.68;
+  let q=(T.attempts<=1&&T.errors===0)?1:0.85;
+  return Math.max(0.3,q-0.05*Math.min(T.errors,3));
+}
+
+/* ---------------- Question selection ---------------- */
+let lastConcept=null,lastConceptRun=0;
+function remainingUnsolved(cid){return QBYCONCEPT[cid].filter(q=>!state.solved[q.id]).length;}
+function pickFrom(cid){
+  const m=mastery(cid);
+  const target=m<0.35?1:m<0.55?2:m<0.72?3:m<0.86?4:5;
+  let pool=QBYCONCEPT[cid].filter(q=>!state.solved[q.id]);
+  if(!pool.length) pool=[...QBYCONCEPT[cid]].sort((a,b)=>(state.servedAt[a.id]||0)-(state.servedAt[b.id]||0)).slice(0,6);
+  pool=[...pool].sort((a,b)=>{
+    const da=Math.abs(a.level-target),dbb=Math.abs(b.level-target);
+    if(da!==dbb)return da-dbb;
+    return (state.servedAt[a.id]||0)-(state.servedAt[b.id]||0);
+  });
+  const top=pool.slice(0,Math.min(3,pool.length));
+  return top[Math.floor(Math.random()*top.length)];
+}
+function pickNextQuestion(){
+  if(state.focus&&unlocked(state.focus))return pickFrom(state.focus);
+  const ul=unlockedList();
+  const fresh=ul.find(c=>mstat(c).n===0);                  // introduce the next new skill, in course order
+  if(fresh&&Math.random()<0.6)return pickFrom(fresh);
+  let cands=ul.filter(c=>remainingUnsolved(c)>0); if(!cands.length)cands=ul;
+  const weights=cands.map(c=>{
+    let w=Math.pow(1-mastery(c),2)+0.15;
+    if(mstat(c).n===0)w+=0.35;                             // gentle pull toward unexplored skills
+    if(c===lastConcept&&lastConceptRun>=2)w*=0.2;          // vary the diet
+    return w;
+  });
+  let r=Math.random()*weights.reduce((a,b)=>a+b,0);
+  for(let i=0;i<cands.length;i++){r-=weights[i];if(r<=0)return pickFrom(cands[i]);}
+  return pickFrom(cands[cands.length-1]);
+}
+function weakestSkill(){
+  const seen=unlockedList().filter(c=>mstat(c).n>0);
+  if(!seen.length)return null;
+  return seen.sort((a,b)=>mastery(a)-mastery(b))[0];
+}
+
+/* ---------------- Ability meter ---------------- */
+const LEVELS=[{min:0,name:'Novice'},{min:25,name:'Learning'},{min:48,name:'Confident'},{min:68,name:'Sharp'},{min:86,name:'Fluent'}];
+function levelFor(p){let cur=LEVELS[0],n=1;LEVELS.forEach((l,i)=>{if(p>=l.min){cur=l;n=i+1;}});return{name:cur.name,n};}
+function refreshAbility(){
+  const p=skillPct(),lv=levelFor(p);
+  document.getElementById('lvl-name').textContent=lv.name;
+  document.getElementById('lvl-sub').textContent='· level '+lv.n;
+  document.getElementById('meter-fill').style.width=Math.max(4,p)+'%';
+  document.getElementById('prog-done').textContent=state.totalSolved;
+}
+
+/* ---------------- Sidebar: skills panel ---------------- */
+function renderSkills(){
+  const list=document.getElementById('lesson-list');list.innerHTML='';
+  const auto=document.createElement('div');
+  auto.className='lesson-item'+(state.focus===null&&view==='q'?' active':'');
+  auto.innerHTML='<div class="dot">🎯</div><div class="label">Auto practice<span class="concept">picks what you need next</span></div>';
+  auto.onclick=()=>{state.focus=null;save();openNext();};
+  list.appendChild(auto);
+  CONCEPT_ORDER.forEach(cid=>{
+    const meta=CONCEPT_META[cid],s=mstat(cid),un=unlocked(cid);
+    const solvedN=QBYCONCEPT[cid].filter(q=>state.solved[q.id]).length;
+    const row=document.createElement('div');
+    row.className='skill-row'+(state.focus===cid&&view==='q'?' active':'')+(un?'':' locked')+(s.m>=0.8?' mastered':'');
+    row.innerHTML=`<div class="skill-top"><span>${un?'':'🔒 '}${meta.label}</span><span class="cnt">${solvedN}/${QUOTA[cid]}</span></div>
+      <div class="skill-bar"><i style="width:${Math.round(s.m*100)}%"></i></div>`;
+    row.onclick=()=>{
+      if(!un){const need=PREREQ[cid].filter(p=>!(mstat(p).m>=0.45||mstat(p).n>=2)).map(p=>CONCEPT_META[p].label).join(', ');
+        showToast('🔒 <b>'+meta.label+'</b> unlocks after you get comfortable with: <b>'+need+'</b>.',null,5000);return;}
+      state.focus=cid;save();openNext();
+    };
+    list.appendChild(row);
+  });
+  const sb=document.getElementById('sandbox-item');
+  sb.classList.toggle('active',view==='sandbox');
+}
+
+/* ---------------- DB bootstrap ---------------- */
+let db=null,view='q',CURQ=null,T=null,hintsShown=0,autoTimer=null,pendingTutQ=null;
+(async function init(){
+  if(typeof initSqlJs==='undefined'){return failBoot();}
+  try{
+    const SQL=await initSqlJs({locateFile:f=>`https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/${f}`});
+    db=new SQL.Database();db.run(SCHEMA_SQL);
+    try{db.exec('SELECT 1 FROM customers FULL JOIN orders ON 1=0 LIMIT 1');}
+    catch(e){console.warn('FULL JOIN not supported by this engine build');}
+    document.getElementById('overlay').style.display='none';
+    boot();
+  }catch(err){console.error(err);failBoot();}
+})();
+function failBoot(){
+  document.getElementById('spinner').style.display='none';
+  document.getElementById('ov-title').textContent='Couldn’t load the SQL engine';
+  document.getElementById('ov-msg').innerHTML='Querious runs a real SQLite database in your browser, which needs an internet connection the first time it loads.<br><br>Please check your connection and refresh the page.';
+}
+function boot(){
+  if('scrollRestoration' in history)history.scrollRestoration='manual';
+  window.scrollTo(0,0);
+  document.getElementById('prog-total').textContent=QUESTIONS.length;
+  refreshAbility();
+  document.getElementById('reset-btn').onclick=()=>{
+    if(confirm('Erase all progress and start fresh?')){state=defaultState();save();location.reload();}
+  };
+  document.getElementById('sandbox-item').onclick=openSandbox;
+  document.getElementById('toast-dismiss').onclick=hideToast;
+  const resume=state.lastQid&&QBYID[state.lastQid]&&!state.solved[state.lastQid]?QBYID[state.lastQid]:null;
+  if(resume){renderSkills();openQuestion(resume);}else openNext();
+  if(!state.seenIntro){
+    showToast('👋 <b>Welcome to practice mode!</b> 200 questions across 14 skills. I pick each next one based on what you need — solve it, and the next loads automatically. New skills always start with a walkthrough.',null,10000);
+    state.seenIntro=true;save();
+  }
+}
+
+/* ---------------- Serving questions ---------------- */
+function openNext(){
+  clearTimeout(autoTimer);autoTimer=null;
+  const q=pickNextQuestion();
+  if(q.concept===lastConcept)lastConceptRun++;else{lastConcept=q.concept;lastConceptRun=1;}
+  state.tick++;state.servedAt[q.id]=state.tick;state.lastQid=q.id;save();
+  openQuestion(q);
+}
+function openQuestion(q,opts){
+  opts=opts||{};
+  clearTimeout(autoTimer);autoTimer=null;
+  view='q';CURQ=q;T={attempts:0,hints:0,errors:0,revealed:false};
+  hintsShown=0;currentJoinType=null;curTutSql='';
+  state.lastQid=q.id;save();
+  renderSkills();
+  const meta=CONCEPT_META[q.concept];
+  const tutActive=!!TUTORIALS[q.concept]&&(opts.tut===true||(opts.tut!==false&&!state.tutsSeen[q.concept]));
+  const dots='●'.repeat(q.level)+'○'.repeat(5-q.level);
+  const solvedBefore=!!state.solved[q.id];
+  const head=`
+      <div class="crumbs">${meta.label} · difficulty ${dots} · question #${q.num} of ${QUESTIONS.length}${solvedBefore?' · ✓ solved before':''}</div>
+      <h1>${q.title}</h1>
+      <p class="blurb">${meta.blurb}</p>`;
+  const tablesBlock=`
+      <div class="section-label">The tables · <span style="text-transform:none;font-weight:500;color:var(--muted)">reference — columns &amp; rows light up as you type</span></div>
+      <div class="schema" id="schema"></div>`;
+  const m=document.getElementById('main');
+  if(tutActive){
+    pendingTutQ=q;
+    m.innerHTML=`
+    <div class="card pad lesson-head">
+      ${head}
+      <div class="tut" id="tut">
+        <div class="tut-head">
+          <span class="tut-title">📖 Walkthrough <span class="tut-count">step <b id="tut-num">1</b> of ${TUTORIALS[q.concept].length}</span></span>
+          <span class="tut-dots" id="tut-dots"></span>
+          <button class="btn ghost tiny" id="tut-skip">Skip — I know this →</button>
+        </div>
+        <div class="tut-body" id="tut-body"></div>
+        <div class="tut-nav">
+          <button class="btn tiny" id="tut-back">← Back</button>
+          <button class="btn run" id="tut-next">Next →</button>
+        </div>
+      </div>
+      ${meta.join?joinVizHTML():''}
+      ${tablesBlock}
+    </div>`;
+    renderSchema();
+    if(meta.join)initJoinViz();
+    initTut(q.concept);
+    return;
+  }
+  m.innerHTML=`
+    <div class="card pad lesson-head">
+      ${head}
+      <div class="goal">
+        <div class="gicon">🎯</div>
+        <div class="gtext"><b>Your task:</b> ${q.prompt}</div>
+      </div>
+      ${meta.join?joinVizHTML():''}
+      <div class="section-label">Your query</div>
+      <div class="editor-wrap">
+        <div class="editor-toolbar">
+          <div class="hint-note" id="hint-note"></div>
+          ${TUTORIALS[q.concept]?'<button class="btn ghost tiny" id="tut-replay">📖 Walkthrough</button>':''}
+          <button class="btn tiny" id="hint-btn">💡 Hint</button>
+        </div>
+        <div class="editor" id="editor">
+          <pre aria-hidden="true"><code id="hl"></code></pre>
+          <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+        </div>
+        <div class="run-row">
+          <button class="btn run" id="run-btn">Run query ▸</button>
+          <span class="kbd">⌘/Ctrl + Enter</span>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn ghost tiny" id="skip-q">Skip ▸</button>
+          <button class="btn ghost tiny" id="reveal-btn" style="display:none">Reveal solution</button>
+        </div>
+      </div>
+      <div class="result" id="result"></div>
+      <div class="hints" id="hints"></div>
+      ${tablesBlock}
+    </div>`;
+  renderSchema();
+  wireEditor('');
+  if(meta.join)initJoinViz();
+  const rb=document.getElementById('tut-replay');
+  if(rb)rb.onclick=()=>openQuestion(CURQ,{tut:true});
+  document.getElementById('skip-q').onclick=()=>{showToast('Skipped — no penalty. On to the next one.',null,2500);openNext();};
+  updateHintNote();
+}
+function updateHintNote(){
+  const note=document.getElementById('hint-note');if(!note||!CURQ)return;
+  if(state.solved[CURQ.id]&&T.attempts===0)note.textContent='You solved this before — beat it again.';
+  else if(hintsShown===0)note.textContent='Stuck? Hints reveal one clue at a time.';
+  else note.textContent=`Hint ${hintsShown} of ${CURQ.hints.length} shown.`;
+}
+
+/* ---------------- Walkthrough engine ---------------- */
+let tutStep=0,curTutSql='';
+function initTut(cid){
+  tutStep=0;
+  const steps=TUTORIALS[cid];
+  document.getElementById('tut-skip').onclick=()=>{
+    state.tutsSeen[cid]=true;save();
+    openQuestion(pendingTutQ,{tut:false});
+    showToast('Skipped. Replay it anytime with the <b>📖 Walkthrough</b> button.',null,4000);
+  };
+  document.getElementById('tut-back').onclick=()=>{if(tutStep>0){tutStep--;renderTutStep(steps);}};
+  document.getElementById('tut-next').onclick=()=>{
+    if(tutStep<steps.length-1){tutStep++;renderTutStep(steps);}
+    else{
+      state.tutsSeen[cid]=true;save();
+      openQuestion(pendingTutQ,{tut:false});
+      showToast('✍️ <b>Your turn.</b> The editor below is live — hints are there if you need them.',null,5000);
+    }
+  };
+  renderTutStep(steps);
+}
+function renderTutStep(steps){
+  const s=steps[tutStep];
+  curTutSql=s.sql||'';
+  document.getElementById('tut-num').textContent=tutStep+1;
+  document.getElementById('tut-dots').innerHTML=steps.map((_,k)=>`<span class="tdot${k<=tutStep?' on':''}"></span>`).join('');
+  let html=`<p class="blurb tut-say">${s.say}</p>`;
+  if(s.sql)html+=`<pre class="tut-code"><code>${highlight(escapeHtml(s.sql))}</code></pre>`;
+  if(s.new)html+=`<div class="tut-new">🆕 New piece: <code>${escapeText(s.new)}</code></div>`;
+  if(s.sql&&s.run)html+=`<div><button class="btn tiny" id="tut-run">▶ Run it</button></div><div class="tut-result" id="tut-result"></div>`;
+  const body=document.getElementById('tut-body');
+  body.innerHTML=html;
+  body.style.animation='none';void body.offsetWidth;body.style.animation='';
+  const tr=document.getElementById('tut-run');
+  if(tr)tr.onclick=()=>{
+    let out;
+    try{out=db.exec(s.sql);}
+    catch(e){document.getElementById('tut-result').innerHTML=`<div class="banner err"><span class="bicon">⚠️</span><span>${escapeText(e.message)}</span></div>`;return;}
+    const res=out.length?out[out.length-1]:null;
+    const box=document.getElementById('tut-result');box.innerHTML='';
+    if(res)box.appendChild(renderTable(res));else box.innerHTML='<div class="empty">No rows.</div>';
+    tr.textContent='▶ Run again';
+  };
+  document.getElementById('tut-back').style.visibility=tutStep===0?'hidden':'visible';
+  document.getElementById('tut-next').textContent=tutStep===steps.length-1?'✍️ My turn — try it':'Next →';
+  if(s.keys){clearHighlights();hlKeys();}
+  else applyHighlightsFor(s.sql||'');
+}
+
+/* ---------------- Running & checking ---------------- */
+/* Plain-English diagnosis of what's actually wrong with the user's SQL,
+   so an error reads like a tutor, not a parser. Returns a string or null. */
+function diagnose(sql,errMsg,q){
+  const s=(sql||'').trim();if(!s)return null;
+  const low=s.toLowerCase();
+  const selIdx=low.search(/\bselect\b/);
+  const fromIdx=low.search(/\bfrom\b/);
+  // clause order — the classic "FROM ... SELECT ..."
+  if(fromIdx>=0&&selIdx>=0&&fromIdx<selIdx)
+    return 'Clause order matters in SQL: <code>SELECT</code> (the columns) comes <b>first</b>, then <code>FROM</code> (the table). Re-order it to <code>SELECT … FROM …</code>.';
+  if(selIdx<0&&fromIdx>=0)
+    return 'Every query has to start with <code>SELECT</code>. Add it before your column list.';
+  if(selIdx>=0&&fromIdx<0&&!/\bfrom\b/.test(low))
+    return 'You’ve chosen columns but not said <i>from which table</i> — add <code>FROM customers</code> or <code>FROM orders</code>.';
+  if(errMsg){
+    let m=errMsg.match(/no such column:\s*([^\s)]+)/i);
+    if(m){
+      const col=m[1];
+      if(/^[A-Za-z]/.test(col)&&!col.includes('.'))
+        return `The database is reading <code>${escapeText(col)}</code> as a column name. If you meant it as a <b>text value</b>, wrap it in single quotes: <code>'${escapeText(col)}'</code>. Otherwise check the spelling against the table headers below.`;
+      return `There’s no column called <code>${escapeText(col)}</code> — check the spelling against the headers in the tables below.`;
+    }
+    m=errMsg.match(/no such table:\s*([^\s)]+)/i);
+    if(m)return `There’s no table called <code>${escapeText(m[1])}</code> — the only two tables are <code>customers</code> and <code>orders</code>.`;
+    if((s.split("'").length-1)%2===1)
+      return 'A quote looks unbalanced — text values need a matching <b>pair</b> of single quotes, like <code>\'London\'</code>.';
+    if(/\bgroup\b(?!\s+by)/i.test(low))
+      return 'It’s two words: <code>GROUP BY</code> (not just GROUP).';
+    if(/\border\b(?!\s+by)/i.test(low))
+      return 'It’s two words: <code>ORDER BY</code> (not just ORDER).';
+  }
+  // valid-but-wrong: nudge toward the skill this question practises
+  if(!errMsg&&q&&q.requires&&!q.requires.test(s)&&q.reqMsg)
+    return `This question is practising ${q.reqMsg} — make sure your query uses it.`;
+  return null;
+}
+function runQuery(){
+  const q=view==='q'?CURQ:null;
+  const sql=taEl.value.trim();
+  const resBox=document.getElementById('result');
+  if(!sql){resBox.innerHTML='';banner('warn','✏️','Write a query first, then hit Run.');return;}
+  let out;
+  try{out=db.exec(sql);}
+  catch(err){
+    if(q){T.errors++;}
+    resBox.innerHTML='';
+    const dg=diagnose(sql,err.message,q);
+    banner('err','⚠️',`<b>SQL error:</b> ${escapeText(err.message)}${dg?`<br><span class="diag">💡 ${dg}</span>`:''}`);
+    if(q&&T.errors>=2){document.getElementById('reveal-btn').style.display='inline-block';if(hintsShown===0&&!dg)showNextHint(true);}
+    return;
+  }
+  const result=out.length?out[out.length-1]:null;
+  resBox.innerHTML='';
+  if(view==='sandbox'){
+    if(!result){banner('ok','✓','Statement ran. (No rows to show.)');}
+    else{banner('ok','✓',`Returned <b>${result.values.length}</b> row(s).`);resBox.appendChild(renderTable(result));}
+    return;
+  }
+  T.attempts++;
+  const check=checkAnswer(q,result);
+  if(check.ok){
+    complete(q,result);
+  }else{
+    const dg=diagnose(sql,null,q);
+    banner('err','✗',`<b>Not quite.</b> ${check.msg}${dg?`<br><span class="diag">💡 ${dg}</span>`:''}`);
+    if(result)resBox.appendChild(renderTable(result));
+    if(T.attempts>=2||T.errors>=2)document.getElementById('reveal-btn').style.display='inline-block';
+    if(T.attempts>=2&&hintsShown===0)showToast('💡 Tip: tap <b>Hint</b> for a nudge — one clue at a time.',null,4000);
+  }
+}
+function complete(q,result){
+  const resBox=document.getElementById('result');
+  const firstSolve=!state.solved[q.id];
+  const quality=qualityOf(T);
+  const before=new Set(unlockedList());
+  if(firstSolve){
+    state.solved[q.id]={t:Date.now(),hints:T.hints,attempts:T.attempts,revealed:T.revealed};
+    state.totalSolved++;
+    updateMastery(q.concept,quality);
+  }else{
+    updateMastery(q.concept,quality,0.12);
+  }
+  save();renderSkills();refreshAbility();
+  const after=unlockedList().filter(c=>!before.has(c));
+  banner('ok','🎉',`<b>Correct!</b>${firstSolve?'':' (repeat — still counts as practice)'}`);
+  const strip=document.createElement('div');
+  strip.className='auto-next';
+  strip.innerHTML=`<span>Next question</span><div class="auto-track"><i></i></div><button class="btn tiny" id="next-now">Now ▸</button><button class="btn ghost tiny" id="next-stay">✕ stay</button>`;
+  resBox.appendChild(strip);
+  if(result)resBox.appendChild(renderTable(result,true));
+  document.getElementById('reveal-btn').style.display='none';
+  const hb=document.getElementById('hint-btn');if(hb)hb.style.display='none';
+  document.getElementById('next-now').onclick=()=>openNext();
+  document.getElementById('next-stay').onclick=()=>{clearTimeout(autoTimer);autoTimer=null;strip.remove();};
+  clearTimeout(autoTimer);
+  autoTimer=setTimeout(()=>openNext(),2200);
+  if(firstSolve)celebrate();
+  after.forEach(c=>showToast('🔓 <b>New skill unlocked:</b> '+CONCEPT_META[c].label+' — it\'s now in the sidebar.',null,5000));
+  if(firstSolve&&state.totalSolved>0&&state.totalSolved%5===0){
+    const w=weakestSkill();
+    if(w)showToast('📊 '+state.totalSolved+'/200 solved. Weakest skill right now: <b>'+CONCEPT_META[w].label+'</b> — I\'ll mix more of it in.',null,5000);
+  }
+  if(state.totalSolved>=QUESTIONS.length&&!state.finished){
+    state.finished=true;save();
+    showToast('🏆 <b>ALL 200 SOLVED.</b> Genuinely impressive. I\'ll keep serving repeats to keep you sharp — or go play in the Sandbox.',null,12000);
+    celebrate();setTimeout(celebrate,600);
+  }
+}
+function runSolution(q){try{const o=db.exec(q.solution);return o.length?o[o.length-1]:null;}catch(e){return null;}}
+function normRows(result){
+  if(!result)return[];
+  return result.values.map(r=>r.map(v=>{
+    if(v===null||v===undefined)return' NULL';
+    if(typeof v==='number')return String(Math.round(v*1e6)/1e6);
+    return String(v);
+  }));
+}
+function checkAnswer(q,userResult){
+  if(q.requires&&!q.requires.test(taEl.value)){
+    return{ok:false,msg:`Your result may be close, but this question is practising ${q.reqMsg} — make sure your query uses it.`};
+  }
+  const sol=runSolution(q);
+  const want=normRows(sol),got=normRows(userResult);
+  if(got.length===0&&want.length>0)return{ok:false,msg:`Your query returned <b>no rows</b>; the goal expects <b>${want.length}</b>.`};
+  const wantCols=sol?sol.columns.length:0,gotCols=userResult?userResult.columns.length:0;
+  if(gotCols!==wantCols)return{ok:false,msg:`You returned <b>${gotCols}</b> column(s); the goal expects <b>${wantCols}</b>. Re-read which columns the task asks for.`};
+  if(q.orderMatters){
+    const same=got.length===want.length&&got.every((r,i)=>JSON.stringify(r)===JSON.stringify(want[i]));
+    if(same)return{ok:true};
+    if(sameMultiset(got,want))return{ok:false,msg:`Right rows, <b>wrong order</b> — check your <code>ORDER BY</code> (and its direction).`};
+    return{ok:false,msg:rowCountMsg(got,want)};
+  }
+  if(sameMultiset(got,want))return{ok:true};
+  return{ok:false,msg:rowCountMsg(got,want)};
+}
+function sameMultiset(a,b){
+  if(a.length!==b.length)return false;
+  const sa=a.map(r=>JSON.stringify(r)).sort(),sb=b.map(r=>JSON.stringify(r)).sort();
+  return sa.every((v,i)=>v===sb[i]);
+}
+function rowCountMsg(got,want){
+  if(got.length!==want.length)return`You returned <b>${got.length}</b> row(s); the goal has <b>${want.length}</b>. ${got.length>want.length?'Too many — tighten your filter or join.':'Too few — are you dropping rows you should keep?'}`;
+  return`Right shape, but some <b>values differ</b> from what's expected.`;
+}
+
+/* ---------------- Hints ---------------- */
+function showNextHint(auto){
+  if(!CURQ)return;
+  if(hintsShown>=CURQ.hints.length){document.getElementById('reveal-btn').style.display='inline-block';return;}
+  const box=document.getElementById('hints');
+  const h=document.createElement('div');h.className='hint';
+  h.innerHTML=`<span class="hicon">💡</span><span>${CURQ.hints[hintsShown]}</span>`;
+  box.appendChild(h);
+  hintsShown++;
+  if(!auto){T.hints++;}
+  if(hintsShown>=2)document.getElementById('reveal-btn').style.display='inline-block';
+  if(hintsShown>=CURQ.hints.length){const b=document.getElementById('hint-btn');if(b)b.style.display='none';}
+  updateHintNote();
+}
+function revealSolution(){
+  if(!CURQ)return;
+  taEl.value=CURQ.solution;paint();analyzeSql();
+  T.revealed=true;
+  banner('warn','🔓','Solution loaded. Run it, study it — the next similar question will check it stuck.');
+}
+
+/* ---------------- Schema rendering ---------------- */
+function renderSchema(){
+  const host=document.getElementById('schema');if(!host)return;
+  host.innerHTML=tableCardHTML('customers','Customers','one row per person')+tableCardHTML('orders','Orders','one row per purchase');
+}
+function tableCardHTML(tname,label){
+  const cols=COLUMNS[tname];
+  let res;try{res=db.exec('SELECT '+cols.join(',')+' FROM '+tname)[0];}catch(e){res={columns:cols,values:[]};}
+  const head=cols.map(c=>`<th data-col="${tname}.${c}">${c}</th>`).join('');
+  const rows=res.values.map(r=>'<tr data-rid="'+tname+'.'+r[0]+'">'+r.map((v,ci)=>{
+    const isNull=v===null||v===undefined;
+    return`<td data-col="${tname}.${cols[ci]}" class="${isNull?'null':''}">${isNull?'NULL':escapeText(String(v))}</td>`;
+  }).join('')+'</tr>').join('');
+  return`<div class="tbl-card"><h3>📋 ${label} <span class="pill">${tname}</span></h3>
+    <div class="tbl-wrap"><table class="data"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+/* ---------------- Editor + syntax highlight ---------------- */
+const KEYWORDS=['select','from','where','and','or','not','null','is','in','like','between','order','by','group','having','limit','offset','as','on','using','join','inner','left','right','full','outer','cross','union','all','distinct','asc','desc','case','when','then','else','end','exists'];
+const FUNCS=['count','sum','avg','min','max','round','upper','lower','length','coalesce','abs','ifnull'];
+const HL_RE=new RegExp('(--[^\\n]*)'+'|'+"('(?:[^']|'')*')"+'|'+'(\\b\\d+(?:\\.\\d+)?\\b)'+'|'+'\\b('+KEYWORDS.join('|')+')\\b'+'|'+'\\b('+FUNCS.join('|')+')\\b','gi');
+function escapeHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function escapeText(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function highlight(escaped){
+  return escaped.replace(HL_RE,(m,c,s,n,kw,fn)=>{
+    if(c)return`<span class="t-com">${c}</span>`;
+    if(s)return`<span class="t-str">${s}</span>`;
+    if(n)return`<span class="t-num">${n}</span>`;
+    if(kw)return`<span class="t-kw">${m}</span>`;
+    if(fn)return`<span class="t-fn">${m}</span>`;
+    return m;
+  });
+}
+let editorEl,taEl,hlEl;
+function wireEditor(initial){
+  editorEl=document.getElementById('editor');
+  taEl=document.getElementById('sql');
+  hlEl=document.getElementById('hl');
+  taEl.value=initial;
+  paint();
+  taEl.addEventListener('input',()=>{paint();debouncedAnalyze();
+    if(autoTimer){clearTimeout(autoTimer);autoTimer=null;const s=document.querySelector('.auto-next');if(s)s.remove();}});
+  taEl.addEventListener('scroll',()=>{const pre=hlEl.parentElement;pre.scrollTop=taEl.scrollTop;pre.scrollLeft=taEl.scrollLeft;});
+  taEl.addEventListener('focus',()=>editorEl.classList.add('focused'));
+  taEl.addEventListener('blur',()=>editorEl.classList.remove('focused'));
+  taEl.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();runQuery();}
+    if(e.key==='Tab'){e.preventDefault();insertAtCursor('  ');}
+  });
+  document.getElementById('run-btn').onclick=runQuery;
+  const hb=document.getElementById('hint-btn');if(hb)hb.onclick=()=>showNextHint(false);
+  const rv=document.getElementById('reveal-btn');if(rv)rv.onclick=revealSolution;
+  analyzeSql();
+  taEl.focus({preventScroll:true});
+}
+function paint(){hlEl.innerHTML=highlight(escapeHtml(taEl.value))+'\n';}
+function insertAtCursor(text){
+  const s=taEl.selectionStart,e=taEl.selectionEnd;
+  taEl.value=taEl.value.slice(0,s)+text+taEl.value.slice(e);
+  taEl.selectionStart=taEl.selectionEnd=s+text.length;
+  paint();debouncedAnalyze();
+}
+let analyzeTimer=null;
+function debouncedAnalyze(){clearTimeout(analyzeTimer);analyzeTimer=setTimeout(analyzeSql,120);}
+
+/* ---------------- Column highlighting ---------------- */
+function clearHighlights(){
+  document.querySelectorAll('[data-col]').forEach(el=>el.classList.remove('col-ref','col-key'));
+  document.querySelectorAll('tr.row-hit,tr.row-miss').forEach(tr=>tr.classList.remove('row-hit','row-miss'));
+}
+function highlightCol(table,col,cls){document.querySelectorAll(`[data-col="${table}.${col}"]`).forEach(el=>el.classList.add(cls));}
+function analyzeSql(){
+  const ed=document.getElementById('sql');
+  if(!ed)return;
+  taEl=ed;
+  applyHighlightsFor(ed.value);
+}
+function hlKeys(){highlightCol('customers','id','col-key');highlightCol('orders','customer_id','col-key');}
+function unionVizKeys(){if(currentJoinType&&document.getElementById('join-chips'))hlKeys();}
+function applyHighlightsFor(sql){
+  clearHighlights();
+  if(!sql||!sql.trim()){unionVizKeys();return;}
+  const alias={customers:'customers',orders:'orders'};
+  const aliasRe=/\b(?:from|join)\s+([a-z_]\w*)(?:\s+(?:as\s+)?([a-z_]\w*))?/ig;
+  let m;
+  while((m=aliasRe.exec(sql))){
+    const tbl=m[1].toLowerCase();
+    if(!COLUMNS[tbl])continue;
+    if(m[2]){const a=m[2].toLowerCase();if(!isKeyword(a))alias[a]=tbl;}
+  }
+  const refRe=/\b([a-z_]\w*)\.([a-z_]\w*)/ig;
+  while((m=refRe.exec(sql))){
+    const t=alias[m[1].toLowerCase()];const c=m[2].toLowerCase();
+    if(t&&COLUMNS[t]&&COLUMNS[t].includes(c))highlightCol(t,c,'col-ref');
+  }
+  const tablesInUse=[...new Set([...sql.matchAll(/\b(?:from|join)\s+([a-z_]\w*)/ig)].map(x=>x[1].toLowerCase()).filter(t=>COLUMNS[t]))];
+  if(/(?<![\w.(])\*/.test(sql)){
+    tablesInUse.forEach(t=>COLUMNS[t].forEach(c=>highlightCol(t,c,'col-ref')));
+  }
+  const starRe=/\b([a-z_]\w*)\.\*/ig;let sm;
+  while((sm=starRe.exec(sql))){
+    const t=alias[sm[1].toLowerCase()];
+    if(t&&COLUMNS[t])COLUMNS[t].forEach(c=>highlightCol(t,c,'col-ref'));
+  }
+  if(tablesInUse.length===1){
+    const t=tablesInUse[0];
+    COLUMNS[t].forEach(c=>{
+      const re=new RegExp('(?<![\\w.])'+c+'(?![\\w])','i');
+      if(re.test(sql))highlightCol(t,c,'col-ref');
+    });
+  }
+  const onRe=/\bon\b([\s\S]*?)(?:\bwhere\b|\bgroup\b|\border\b|\blimit\b|\bhaving\b|$)/i;
+  const onM=sql.match(onRe);
+  if(onM){
+    const seg=onM[1];
+    const kr=/\b([a-z_]\w*)\.([a-z_]\w*)/ig;let k;
+    while((k=kr.exec(seg))){
+      const t=alias[k[1].toLowerCase()];const c=k[2].toLowerCase();
+      if(t&&COLUMNS[t]&&COLUMNS[t].includes(c)){highlightCol(t,c,'col-key');}
+    }
+  }
+  applyRowHighlights(sql,alias,tablesInUse);
+  unionVizKeys();
+}
+/* Evaluate which ROWS of each table survive the query, and fade the rest.
+   Probes the live engine with a rewritten "SELECT id …" version of the query;
+   if the rewrite isn't valid SQL (exotic shapes), we silently skip. */
+function applyRowHighlights(sql,alias,tablesInUse){
+  if(!db||!tablesInUse.length)return;
+  if(!/\bwhere\b|\blimit\b|\bjoin\b/i.test(sql))return;   // nothing filters rows → no dimming
+  const hasGroup=/\bgroup\s+by\b/i.test(sql);
+  const joined=tablesInUse.length>1||/\bjoin\b/i.test(sql);
+  tablesInUse.forEach(t=>{
+    let probe;
+    if(!joined){
+      let tail=sql.replace(/^[\s\S]*?\bfrom\b\s+[a-z_]\w*/i,'');
+      if(hasGroup)tail=tail.replace(/\bgroup\s+by\b[\s\S]*$/i,'');  // membership = rows fed into the grouping
+      probe='SELECT id FROM '+t+' '+tail;
+    }else{
+      let body=sql.replace(/^\s*select\b[\s\S]*?\bfrom\b/i,'FROM');
+      body=body.replace(/\bgroup\s+by\b[\s\S]*$/i,'');
+      body=body.replace(/\border\s+by\b[\s\S]*$/i,'');
+      probe='SELECT DISTINCT '+t+'.id '+body;
+    }
+    probe=probe.replace(/;\s*$/,'');
+    let ids;
+    try{
+      const o=db.exec(probe);
+      ids=new Set((o.length?o[o.length-1].values:[]).map(r=>r[0]));
+    }catch(e){return;}
+    document.querySelectorAll('tr[data-rid^="'+t+'."]').forEach(tr=>{
+      const id=Number(tr.dataset.rid.split('.')[1]);
+      tr.classList.add(ids.has(id)?'row-hit':'row-miss');
+    });
+  });
+}
+function isKeyword(w){return KEYWORDS.includes(w)||FUNCS.includes(w);}
+
+/* ---------------- Result table ---------------- */
+function renderTable(result){
+  const wrap=document.createElement('div');wrap.className='result-scroll';
+  const meta=document.createElement('div');meta.className='result-meta';
+  meta.textContent=`${result.values.length} row(s) × ${result.columns.length} column(s)`;
+  const t=document.createElement('table');t.className='data';
+  t.innerHTML='<thead><tr>'+result.columns.map(c=>`<th>${escapeText(c)}</th>`).join('')+'</tr></thead>';
+  const tb=document.createElement('tbody');
+  result.values.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=r.map(v=>{const isNull=v===null||v===undefined;return`<td class="${isNull?'null':''}">${isNull?'NULL':escapeText(String(v))}</td>`;}).join('');
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+  const holder=document.createElement('div');
+  holder.appendChild(meta);wrap.appendChild(t);holder.appendChild(wrap);
+  return holder;
+}
+
+/* ---------------- JOIN visualizer ---------------- */
+const JOIN_INFO={
+  inner:{regions:['overlap'],title:'INNER JOIN',text:`Keeps <b>only rows that match</b> on both sides. The 3 quiet customers and the 2 orphan orders are all dropped.`},
+  left:{regions:['leftonly','overlap'],title:'LEFT JOIN',text:`Keeps <b>all customers</b> + their matches. Margaret, Tim & Barbara stay (padded with <code>NULL</code>); the orphan orders are dropped.`},
+  right:{regions:['overlap','rightonly'],title:'RIGHT JOIN',text:`Keeps <b>all orders</b> + their matches. The 2 orphan orders stay (NULL customer); quiet customers are dropped.`},
+  full:{regions:['leftonly','overlap','rightonly'],title:'FULL JOIN',text:`Keeps <b>everything from both sides</b>. Nobody is dropped — unmatched rows are padded with <code>NULL</code>.`}
+};
+function joinVizHTML(){
+  return`
+  <div class="section-label">JOIN explorer · <span style="text-transform:none;font-weight:500;color:var(--muted)">click a join type to see what it keeps</span></div>
+  <div class="card pad" style="background:rgba(13,15,30,0.5)">
+    <div class="chips" id="join-chips">
+      <div class="chip" data-jt="inner">INNER JOIN</div>
+      <div class="chip" data-jt="left">LEFT JOIN</div>
+      <div class="chip" data-jt="right">RIGHT JOIN</div>
+      <div class="chip" data-jt="full">FULL JOIN</div>
+    </div>
+    <div class="joinviz">
+      <svg viewBox="0 0 360 220" id="venn" role="img" aria-label="Venn diagram of the join">
+        <defs>
+          <linearGradient id="gA" x1="0" x2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+          <clipPath id="clipA"><circle cx="150" cy="110" r="80"/></clipPath>
+          <mask id="notB"><rect x="0" y="0" width="360" height="220" fill="#fff"/><circle cx="230" cy="110" r="80" fill="#000"/></mask>
+          <mask id="notA"><rect x="0" y="0" width="360" height="220" fill="#fff"/><circle cx="150" cy="110" r="80" fill="#000"/></mask>
+        </defs>
+        <circle class="region" id="r-leftonly" cx="150" cy="110" r="80" fill="url(#gA)" mask="url(#notB)"/>
+        <circle class="region" id="r-rightonly" cx="230" cy="110" r="80" fill="url(#gA)" mask="url(#notA)"/>
+        <g clip-path="url(#clipA)"><circle class="region" id="r-overlap" cx="230" cy="110" r="80" fill="url(#gA)"/></g>
+        <circle class="circ" cx="150" cy="110" r="80"/>
+        <circle class="circ" cx="230" cy="110" r="80"/>
+        <text class="clabel" x="92" y="40" text-anchor="middle">Customers</text>
+        <text class="clabel" x="288" y="40" text-anchor="middle">Orders</text>
+        <text class="csub" x="92" y="196" text-anchor="middle">3 customers, no orders</text>
+        <text class="csub" x="288" y="196" text-anchor="middle">2 orders, no customer</text>
+        <text class="csub" x="190" y="110" text-anchor="middle" style="fill:#0b0d1c;font-weight:700" id="venn-mid">matched</text>
+      </svg>
+      <div>
+        <div class="viz-explain" id="viz-explain">Pick a join type above. The matching key columns — <span style="color:var(--key)">customers.id 🔑</span> and <span style="color:var(--key)">orders.customer_id 🔑</span> — will light up in the tables below.</div>
+        <div class="ins"><button class="btn tiny" id="viz-insert" style="display:none">Insert this query into the editor</button></div>
+      </div>
+    </div>
+  </div>`;
+}
+let currentJoinType=null;
+function initJoinViz(){
+  document.querySelectorAll('#join-chips .chip').forEach(ch=>{ch.onclick=()=>selectJoin(ch.dataset.jt);});
+  document.getElementById('viz-insert').onclick=()=>{
+    if(!currentJoinType)return;
+    const ed=document.getElementById('sql');if(!ed)return;
+    taEl=ed;
+    const kw={inner:'JOIN',left:'LEFT JOIN',right:'RIGHT JOIN',full:'FULL JOIN'}[currentJoinType];
+    taEl.value=`SELECT customers.name, orders.product\nFROM customers\n${kw} orders ON customers.id = orders.customer_id`;
+    paint();analyzeSql();taEl.focus();
+  };
+  const pre=CURQ?(CONCEPT_META[CURQ.concept].join||'inner'):'inner';
+  selectJoin(pre);
+}
+function selectJoin(jt){
+  currentJoinType=jt;
+  document.querySelectorAll('#join-chips .chip').forEach(c=>c.classList.toggle('active',c.dataset.jt===jt));
+  const info=JOIN_INFO[jt];
+  ['leftonly','overlap','rightonly'].forEach(r=>{
+    document.getElementById('r-'+r).classList.toggle('on',info.regions.includes(r));
+  });
+  document.getElementById('viz-explain').innerHTML=`<b>${info.title}</b> — ${info.text}`;
+  const ib=document.getElementById('viz-insert');
+  if(ib)ib.style.display=document.getElementById('sql')?'inline-block':'none';
+  if(document.getElementById('sql')){
+    clearHighlights();hlKeys();
+    debouncedAnalyze();
+  }else{
+    applyHighlightsFor(curTutSql||'');
+  }
+}
+
+/* ---------------- Sandbox ---------------- */
+function openSandbox(){
+  clearTimeout(autoTimer);autoTimer=null;
+  view='sandbox';renderSkills();
+  const m=document.getElementById('main');
+  m.innerHTML=`
+    <div class="card pad lesson-head">
+      <div class="crumbs">Free play</div>
+      <h1>Sandbox</h1>
+      <p class="blurb">No goals, no checking — just you and the database. Write any SQL against <code>customers</code> and <code>orders</code>.</p>
+      <div class="section-label">The tables</div>
+      <div class="schema" id="schema"></div>
+      <div class="section-label">Your query</div>
+      <div class="editor-wrap">
+        <div class="editor" id="editor">
+          <pre aria-hidden="true"><code id="hl"></code></pre>
+          <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+        </div>
+        <div class="run-row"><button class="btn run" id="run-btn">Run query ▸</button><span class="kbd">⌘/Ctrl + Enter</span></div>
+      </div>
+      <div class="result" id="result"></div>
+    </div>`;
+  renderSchema();
+  wireEditor('SELECT customers.name, customers.city, orders.product, orders.amount\nFROM customers\nLEFT JOIN orders ON customers.id = orders.customer_id\nORDER BY orders.amount DESC;');
+}
+
+/* ---------------- UI helpers ---------------- */
+function banner(kind,icon,html){
+  const box=document.getElementById('result');
+  const b=document.createElement('div');b.className='banner '+kind;
+  b.innerHTML=`<span class="bicon">${icon}</span><span>${html}</span>`;
+  box.prepend(b);
+}
+let toastTimer=null;
+function showToast(html,action,ms){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-text').innerHTML=html;
+  const a=document.getElementById('toast-action');
+  if(action){a.style.display='inline-block';a.textContent=action.label;a.onclick=()=>{hideToast();action.fn();};}
+  else a.style.display='none';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  if(ms)toastTimer=setTimeout(hideToast,ms);
+}
+function hideToast(){document.getElementById('toast').classList.remove('show');}
+function celebrate(){
+  const cv=document.getElementById('confetti'),ctx=cv.getContext('2d');
+  cv.width=innerWidth;cv.height=innerHeight;
+  const colors=['#7c5cff','#22d3ee','#34d399','#fbbf24','#fb7185','#ffffff'];
+  const N=140,parts=[];
+  for(let i=0;i<N;i++){
+    parts.push({x:innerWidth/2+(Math.random()-0.5)*160,y:innerHeight*0.32,vx:(Math.random()-0.5)*11,vy:Math.random()*-13-4,g:0.32+Math.random()*0.12,s:5+Math.random()*7,rot:Math.random()*6.28,vr:(Math.random()-0.5)*0.4,c:colors[(Math.random()*colors.length)|0]});
+  }
+  let frames=0;
+  (function tick(){
+    frames++;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    parts.forEach(p=>{
+      p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.rot+=p.vr;
+      ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+      ctx.globalAlpha=Math.max(0,1-frames/120);
+      ctx.fillStyle=p.c;ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6);
+      ctx.restore();
+    });
+    if(frames<120)requestAnimationFrame(tick);else ctx.clearRect(0,0,cv.width,cv.height);
+  })();
+}
+window.addEventListener('resize',()=>{const cv=document.getElementById('confetti');cv.width=innerWidth;cv.height=innerHeight;});
+
+/* ---------------- Dev self-test ---------------- */
+window.__bankTest=function(){
+  const perConcept={};let bad=[];
+  QUESTIONS.forEach(q=>{
+    perConcept[q.concept]=(perConcept[q.concept]||0)+1;
+    try{
+      const r=db.exec(q.solution);
+      const rows=r.length?r[r.length-1].values.length:0;
+      if(rows===0)bad.push({id:q.id,err:'EMPTY RESULT'});
+      if(q.requires&&!q.requires.test(q.solution))bad.push({id:q.id,err:'REQUIRES FAILS OWN SOLUTION'});
+    }catch(e){bad.push({id:q.id,err:e.message});}
+  });
+  return{total:QUESTIONS.length,perConcept,bad};
+};
+</script>
+</body>
+</html>
