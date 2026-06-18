@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Querious — learn SQL by doing</title>
 <script src="https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/sql-wasm.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
 <style>
   :root{
     --bg:#0a0b14;
@@ -61,6 +62,11 @@
   .brand .name{font-size:18px}
   .brand .tag{font-size:12px;color:var(--muted);font-weight:500;margin-left:2px}
   .spacer{flex:1}
+  .trackswitch{display:flex;gap:3px;padding:3px;border:1px solid var(--stroke);border-radius:11px;background:rgba(255,255,255,0.04);margin-left:14px}
+  .track-btn{font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);background:transparent;border:none;border-radius:8px;padding:6px 16px;transition:.15s}
+  .track-btn:hover{color:var(--text)}
+  .track-btn.active{color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 4px 14px rgba(124,92,255,.4)}
+  .track-btn .pytag{font-size:10px;opacity:.7;font-weight:600}
 
   .ability{
     display:flex;align-items:center;gap:12px;
@@ -231,6 +237,7 @@
   .banner .diag code{background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:5px}
   .result-meta{font-size:12px;color:var(--faint);margin:4px 2px 10px}
   .result-scroll{overflow:auto;border:1px solid var(--stroke);border-radius:12px;max-height:340px}
+  .pyout{margin:0;padding:14px 16px;font-family:var(--mono);font-size:13.5px;line-height:1.6;color:#cfe3d6;white-space:pre-wrap;word-break:break-word}
 
   .hints{margin-top:16px;display:flex;flex-direction:column;gap:10px}
   .hint{
@@ -336,8 +343,12 @@
     <div class="logo">◧</div>
     <div>
       <span class="name">Querious</span>
-      <span class="tag">· learn SQL by doing</span>
+      <span class="tag">· learn by doing</span>
     </div>
+  </div>
+  <div class="trackswitch" id="trackswitch" role="tablist" aria-label="Choose a track">
+    <button class="track-btn active" data-track="sql" role="tab">SQL</button>
+    <button class="track-btn" data-track="python" role="tab">Python</button>
   </div>
   <div class="spacer"></div>
   <div class="ability" title="Auto-detected from how you solve each step">
@@ -418,8 +429,8 @@ const SCHEMA_SQL =
   ORDERS.map(o=>{const m=ORDER_META[o[0]];return `(${o[0]},${o[1]===null?'NULL':o[1]},'${o[2]}',${o[3]},'${m[0]}',${m[1]?`'${m[1]}'`:'NULL'})`;}).join(',') + ';';
 
 /* ---------------- Skills (concepts) ---------------- */
-const CONCEPT_ORDER=['select','columns','where','where-multi','order','limit','distinct','aggregate','group','having','inner-join','left-join','full-join','join-group'];
-const CONCEPT_META={
+let CONCEPT_ORDER=['select','columns','where','where-multi','order','limit','distinct','aggregate','group','having','inner-join','left-join','full-join','join-group'];
+let CONCEPT_META={
   'select':      {label:'SELECT basics',   blurb:'Every SQL query starts with <code>SELECT</code> (which columns) and <code>FROM</code> (which table). The star <code>*</code> means <b>every column</b>.'},
   'columns':     {label:'Picking columns', blurb:'List the exact columns you want, separated by commas — they come back in the order you ask.'},
   'where':       {label:'WHERE filters',   blurb:'<code>WHERE</code> keeps only the rows that match a condition. Text values need <b>single quotes</b>.'},
@@ -435,18 +446,18 @@ const CONCEPT_META={
   'full-join':   {label:'FULL JOIN',       blurb:'<code>FULL JOIN</code> keeps unmatched rows from <b>both</b> sides, padded with <code>NULL</code>s.', join:'full'},
   'join-group':  {label:'JOIN + GROUP BY', blurb:'The full combo: join the tables, group the rows, aggregate each group.', join:'left'}
 };
-const PREREQ={
+let PREREQ={
   'select':[], 'columns':['select'], 'where':['columns'], 'where-multi':['where'],
   'order':['where'], 'limit':['order'], 'distinct':['columns'], 'aggregate':['where'],
   'group':['aggregate'], 'having':['group'], 'inner-join':['where'],
   'left-join':['inner-join'], 'full-join':['left-join'], 'join-group':['inner-join','group']
 };
-const QUOTA={ 'select':2,'columns':16,'where':24,'where-multi':14,'order':12,'limit':10,
+let QUOTA={ 'select':2,'columns':16,'where':24,'where-multi':14,'order':12,'limit':10,
   'distinct':6,'aggregate':24,'group':18,'having':10,'inner-join':22,'left-join':14,
   'full-join':8,'join-group':20 };
 
 /* ---------------- Walkthroughs (teach-mode per skill) ---------------- */
-const TUTORIALS={
+let TUTORIALS={
   'select':[
     {say:"First, what you're looking at: a <b>database</b> stores information in <b>tables</b> — grids, like spreadsheets. Ours has two, shown below: <code>customers</code> and <code>orders</code>. Each <b>row</b> is one record; each <b>column</b> is one property, like <code>name</code> or <code>city</code>."},
     {say:"<b>SQL</b> (Structured Query Language) is how you ask a database questions. You type a <b>query</b> — a one-line request — run it, and the database answers with a table of results. Let's build your very first query, word by word."},
@@ -1158,36 +1169,447 @@ Object.assign(FAMILIES,{
 });
 
 /* ---------------- Build the bank ---------------- */
-const QUESTIONS=[];
+let QUESTIONS=[];
 CONCEPT_ORDER.forEach((cid,ci)=>{
   const pool=FAMILIES[cid]();
   seededShuffle(pool,0xC0FFEE+ci);
   pool.slice(0,QUOTA[cid]).forEach(q=>QUESTIONS.push(q));
 });
 QUESTIONS.forEach((q,i)=>{ q.num=i+1; q.hints=[...q.hints,'Full answer: <code>'+q.solution.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</code>']; });
-const QBYID={}; QUESTIONS.forEach(q=>QBYID[q.id]=q);
-const QBYCONCEPT={}; CONCEPT_ORDER.forEach(c=>QBYCONCEPT[c]=QUESTIONS.filter(q=>q.concept===c));
-console.assert(QUESTIONS.length===400,'bank size',QUESTIONS.length); console.log('Querious bank:',QUESTIONS.length,'questions across',CONCEPT_ORDER.length,'skills');
+let QBYID={}; QUESTIONS.forEach(q=>QBYID[q.id]=q);
+let QBYCONCEPT={}; CONCEPT_ORDER.forEach(c=>QBYCONCEPT[c]=QUESTIONS.filter(q=>q.concept===c));
+console.assert(QUESTIONS.length===400,'sql bank size',QUESTIONS.length);
 
-/* ---------------- Persistent state (v2) ---------------- */
-const SAVE_KEY='querious.v2';
-const defaultState=()=>({v:2,tick:0,focus:null,lastQid:null,totalSolved:0,
-  mastery:{},solved:{},servedAt:{},tutsSeen:{},seenIntro:false,finished:false});
+/* ============================================================
+   TRACKS — register SQL as the first track; Python added below.
+   The engine reads the mutable globals above; activateTrack() swaps them.
+   ============================================================ */
+let DIVIDER={before:STAGE2_START,label:'Advanced · dbt-style'};
+const TRACKS={};
+TRACKS.sql={ key:'sql', label:'SQL', runtime:'sql',
+  concepts:CONCEPT_ORDER, meta:CONCEPT_META, prereq:PREREQ, quota:QUOTA,
+  tutorials:TUTORIALS, questions:QUESTIONS, byId:QBYID, byConcept:QBYCONCEPT,
+  divider:{before:STAGE2_START,label:'Advanced · dbt-style'} };
+
+/* ============================================================
+   PYTHON TRACK — 200 questions across 14 skills (real Python via Pyodide)
+   ============================================================ */
+function PQ(id,concept,level,title,prompt,solution,kind,opts){opts=opts||{};return{id,concept,level,title,prompt,solution,kind:kind||'expr',varname:opts.var||'result',fname:opts.fn||'f',cases:opts.cases||[[]],requires:opts.req||null,reqMsg:opts.reqMsg||null,hints:opts.hints||[]};}
+const PY_CONCEPT_ORDER=['print','vars','arithmetic','strings','booleans','conditionals','lists','loops','dicts','functions','strmethods','listcomp','tuples-sets','dictcomp'];
+const PY_META={
+  'print':       {label:'Printing',     blurb:"<code>print(...)</code> shows a value on screen — it's how a program talks back to you."},
+  'vars':        {label:'Variables',    blurb:"A <b>variable</b> stores a value with <code>=</code>, e.g. <code>x = 5</code>. You can reuse it and update it."},
+  'arithmetic':  {label:'Arithmetic',   blurb:"Python does maths with <code>+ - * /</code>, plus <code>//</code> (whole-number divide), <code>%</code> (remainder) and <code>**</code> (power)."},
+  'strings':     {label:'Strings',      blurb:"Text is a <b>string</b>. Join with <code>+</code>, repeat with <code>*</code>, measure with <code>len()</code>, and slice with <code>[start:stop]</code>."},
+  'booleans':    {label:'Booleans',     blurb:"Comparisons (<code>== != &lt; &gt; &lt;= &gt;=</code>) give <code>True</code>/<code>False</code>; combine them with <code>and</code>, <code>or</code>, <code>not</code>."},
+  'conditionals':{label:'if / else',    blurb:"<code>if</code> / <code>elif</code> / <code>else</code> choose what to do based on a condition."},
+  'lists':       {label:'Lists',        blurb:"A <b>list</b> is an ordered collection: <code>[1, 2, 3]</code>. Index with <code>[i]</code>, slice with <code>[a:b]</code>, and use <code>len/sum/max/min/sorted</code>."},
+  'loops':       {label:'Loops',        blurb:"A <code>for</code> loop repeats over items (or a <code>range</code>); a <code>while</code> loop repeats while a condition holds."},
+  'dicts':       {label:'Dictionaries', blurb:"A <b>dict</b> maps keys to values: <code>{'a': 1}</code>. Look up with <code>[key]</code> or <code>.get(key, default)</code>."},
+  'functions':   {label:'Functions',    blurb:"<code>def</code> names a reusable block that takes inputs (parameters) and <code>return</code>s a value."},
+  'strmethods':  {label:'String methods',blurb:"Strings have handy methods: <code>.split()</code>, <code>.join()</code>, <code>.replace()</code>, <code>.count()</code>, <code>.find()</code> and more."},
+  'listcomp':    {label:'Comprehensions',blurb:"A <b>list comprehension</b> builds a list in one line: <code>[expr for x in items if condition]</code>."},
+  'tuples-sets': {label:'Tuples & sets', blurb:"A <b>tuple</b> is a fixed sequence <code>(1, 2, 3)</code>; a <b>set</b> is an unordered collection of unique values <code>{1, 2, 3}</code>."},
+  'dictcomp':    {label:'Dict comprehensions',blurb:"A <b>dict comprehension</b> builds a dict in one line: <code>{k: v for ... }</code>."}
+};
+const PY_PREREQ={
+  'print':[], 'vars':['print'], 'arithmetic':['vars'], 'strings':['vars'], 'booleans':['arithmetic'],
+  'conditionals':['booleans'], 'lists':['strings'], 'loops':['lists','conditionals'], 'dicts':['lists'],
+  'functions':['conditionals'], 'strmethods':['strings'], 'listcomp':['loops'], 'tuples-sets':['lists'], 'dictcomp':['listcomp','dicts']
+};
+const PY_QUOTA={ 'print':8,'vars':12,'arithmetic':16,'strings':18,'booleans':16,'conditionals':16,'lists':18,'loops':18,'dicts':16,'functions':16,'strmethods':12,'listcomp':14,'tuples-sets':10,'dictcomp':10 };
+const PY_TUTORIALS={
+  'print':[
+    {say:"Welcome to Python! A program is a list of instructions. The first one to learn is <code>print()</code> — it displays whatever you put in the brackets."},
+    {say:"Text goes in quotes. Press <b>▶ Run it</b> to see it appear.", code:"print('Hello, world!')", new:"print('...')", run:true},
+    {say:"Numbers don't need quotes, and Python will do the maths first.", code:"print(2 + 2)", new:"print(a number)", run:true},
+    {say:"Your turn — print what the task asks for."}
+  ],
+  'vars':[
+    {say:"A <b>variable</b> is a labelled box for a value. You put a value in with <code>=</code> (read it as “gets”).", code:"x = 5\nprint(x)", new:"x = 5", run:true},
+    {say:"You can use variables in maths, and store the result in another variable.", code:"price = 20\nqty = 3\ntotal = price * qty\nprint(total)", new:"total = price * qty", run:true},
+    {say:"In these tasks you put your answer in a variable called <code>result</code>. Your turn."}
+  ],
+  'arithmetic':[
+    {say:"Python is a calculator. Beyond <code>+ - *</code>, there are three you'll want: <code>/</code> always gives a decimal, <code>//</code> gives the whole-number part, and <code>%</code> gives the remainder.", code:"print(17 / 5)\nprint(17 // 5)\nprint(17 % 5)", new:"/  //  %", run:true},
+    {say:"<code>**</code> is “to the power of”.", code:"print(2 ** 10)", new:"**", run:true},
+    {say:"Your turn — write an expression that computes the answer."}
+  ],
+  'strings':[
+    {say:"A <b>string</b> is text in quotes. <code>+</code> joins strings and <code>*</code> repeats them.", code:"print('ab' + 'cd')\nprint('ho' * 3)", new:"+ and * on strings", run:true},
+    {say:"<code>len()</code> counts characters, and <code>[i]</code> picks one out (counting from 0).", code:"print(len('Python'))\nprint('Python'[0])", new:"len() and [i]", run:true},
+    {say:"A <b>slice</b> <code>[a:b]</code> takes a range of characters.", code:"print('Python'[0:3])", new:"[a:b]", run:true},
+    {say:"Your turn."}
+  ],
+  'booleans':[
+    {say:"Comparisons answer yes/no questions and give <code>True</code> or <code>False</code>.", code:"print(5 == 5)\nprint(3 > 10)", new:"== and >", run:true},
+    {say:"Combine conditions with <code>and</code> (both), <code>or</code> (either), <code>not</code> (flip).", code:"print(True and False)\nprint(not True)", new:"and / or / not", run:true},
+    {say:"<code>in</code> checks membership.", code:"print(3 in [1, 2, 3])", new:"in", run:true},
+    {say:"Your turn — write an expression that's True or False."}
+  ],
+  'conditionals':[
+    {say:"<code>if</code> runs code only when a condition is True; <code>else</code> covers the rest. Inside a function you <code>return</code> the answer.", code:"def label(n):\n    if n > 0:\n        return 'positive'\n    else:\n        return 'not positive'\nprint(label(5))\nprint(label(-1))", new:"if / else", run:true},
+    {say:"Add <code>elif</code> for in-between cases — they're checked top to bottom.", code:"def grade(s):\n    if s >= 90:\n        return 'A'\n    elif s >= 80:\n        return 'B'\n    else:\n        return 'C'\nprint(grade(95), grade(85), grade(50))", new:"elif", run:true},
+    {say:"Your turn — write a function <code>f</code> with an if statement."}
+  ],
+  'lists':[
+    {say:"A <b>list</b> holds many values in order, in square brackets.", code:"nums = [10, 20, 30]\nprint(nums)\nprint(nums[0])", new:"[ ... ] and [i]", run:true},
+    {say:"Handy built-ins work on lists: <code>len</code>, <code>sum</code>, <code>max</code>, <code>min</code>, <code>sorted</code>.", code:"print(sum([1, 2, 3, 4]))\nprint(sorted([3, 1, 2]))", new:"sum() / sorted()", run:true},
+    {say:"Your turn."}
+  ],
+  'loops':[
+    {say:"A <code>for</code> loop repeats once per item. <code>range(n)</code> gives 0,1,…,n-1.", code:"total = 0\nfor i in range(1, 5):\n    total += i\nprint(total)", new:"for ... in range(...)", run:true},
+    {say:"You can loop over a list's items directly.", code:"for word in ['a', 'bb', 'ccc']:\n    print(len(word))", new:"for x in list", run:true},
+    {say:"Your turn — write a function <code>f</code> that uses a loop."}
+  ],
+  'dicts':[
+    {say:"A <b>dict</b> stores key → value pairs. Look a value up by its key.", code:"ages = {'Ada': 36, 'Sam': 41}\nprint(ages['Ada'])", new:"{key: value} and [key]", run:true},
+    {say:"<code>.get(key, default)</code> is a safe lookup that won't crash if the key is missing.", code:"ages = {'Ada': 36}\nprint(ages.get('Zoe', 0))", new:".get(key, default)", run:true},
+    {say:"Your turn."}
+  ],
+  'functions':[
+    {say:"A <b>function</b> packages reusable logic. <code>def</code> names it, the brackets list its inputs, and <code>return</code> hands back the answer.", code:"def double(x):\n    return x * 2\nprint(double(5))", new:"def name(x): return ...", run:true},
+    {say:"Functions can take several inputs, and you can give defaults.", code:"def power(x, n=2):\n    return x ** n\nprint(power(5))\nprint(power(5, 3))", new:"default argument n=2", run:true},
+    {say:"In these tasks, name your function <code>f</code>. Your turn."}
+  ],
+  'strmethods':[
+    {say:"Strings carry <b>methods</b> — actions you call with a dot. <code>.split()</code> breaks a string into a list.", code:"print('a,b,c'.split(','))", new:".split(sep)", run:true},
+    {say:"<code>.join()</code> is the reverse — it glues a list into a string.", code:"print('-'.join(['a', 'b', 'c']))", new:"sep.join(list)", run:true},
+    {say:"Your turn."}
+  ],
+  'listcomp':[
+    {say:"A <b>list comprehension</b> builds a list in one readable line: <code>[expression for item in items]</code>.", code:"print([x * 2 for x in [1, 2, 3]])", new:"[expr for x in items]", run:true},
+    {say:"Add <code>if</code> to keep only some items.", code:"print([x for x in range(10) if x % 2 == 0])", new:"... if condition", run:true},
+    {say:"Your turn — build the list with a comprehension."}
+  ],
+  'tuples-sets':[
+    {say:"A <b>tuple</b> is like a list but fixed — written with round brackets.", code:"point = (3, 4)\nprint(point[0])", new:"(a, b)", run:true},
+    {say:"A <b>set</b> keeps only unique values, unordered. Sort it to get a tidy list.", code:"print(sorted(set([1, 2, 2, 3])))", new:"set(...)", run:true},
+    {say:"Your turn."}
+  ],
+  'dictcomp':[
+    {say:"A <b>dict comprehension</b> builds a dict in one line: <code>{key: value for item in items}</code>.", code:"print({x: x ** 2 for x in range(4)})", new:"{k: v for x in items}", run:true},
+    {say:"Your turn — build the dict with a comprehension."}
+  ]
+};
+const PY_FAMILIES={
+'print':()=>{
+  const rq={req:/print\s*\(/,reqMsg:"<code>print()</code>"};
+  return [
+    PQ('p:hello','print',1,"Say hello","Print the text <b>Hello, world!</b>","print('Hello, world!')",'print',{...rq,hints:["Put the text in quotes inside print().","<code>print('Hello, world!')</code>"]}),
+    PQ('p:name','print',1,"Print a word","Print the text <b>Querious</b>","print('Querious')",'print',{...rq,hints:["<code>print('Querious')</code>","Quotes around the text."]}),
+    PQ('p:num','print',1,"Print a number","Print the number <b>7</b> (no quotes needed for numbers).","print(7)",'print',{...rq,hints:["Numbers don't need quotes.","<code>print(7)</code>"]}),
+    PQ('p:sum','print',1,"Print a sum","Print the result of <b>3 + 4</b>.","print(3 + 4)",'print',{...rq,hints:["Python does the maths inside print().","<code>print(3 + 4)</code>"]}),
+    PQ('p:multi','print',2,"Print three things","Print <b>a</b>, <b>b</b> and <b>c</b> in one print, separated by spaces.","print('a', 'b', 'c')",'print',{...rq,hints:["print() can take several values separated by commas.","<code>print('a', 'b', 'c')</code>"]}),
+    PQ('p:mult','print',2,"Print a product","Print the result of <b>10 times 5</b>.","print(10 * 5)",'print',{...rq,hints:["Use * for multiply.","<code>print(10 * 5)</code>"]}),
+    PQ('p:phrase','print',1,"Print a phrase","Print the text <b>I love Python</b>.","print('I love Python')",'print',{...rq,hints:["<code>print('I love Python')</code>","One string in quotes."]}),
+    PQ('p:two','print',2,"Two lines","Print <b>first</b> on one line and <b>second</b> on the next (two print statements).","print('first')\nprint('second')",'print',{...rq,hints:["Each print() makes its own line.","Use two print() calls."]})
+  ];
+},
+'vars':()=>{
+  const H=["Use <code>=</code> to store a value in <code>result</code>.","The variable on these tasks must be called <code>result</code>."];
+  return [
+    PQ('v:int','vars',1,"Store a number","Set <code>result</code> to the whole number <b>5</b>.","result = 5",'var',{hints:H}),
+    PQ('v:reuse','vars',2,"Use a variable","Make a variable <code>x</code> equal to 10, then set <code>result</code> to <b>x times 2</b>.","x = 10\nresult = x * 2",'var',{hints:["First line: <code>x = 10</code>. Second: <code>result = x * 2</code>.","result should end up 20."]}),
+    PQ('v:sum','vars',1,"A small sum","Set <code>result</code> to <b>5 + 3</b>.","result = 5 + 3",'var',{hints:H}),
+    PQ('v:two','vars',2,"Two variables","Set <code>a</code> to 4 and <code>b</code> to 6, then set <code>result</code> to <b>a + b</b>.","a = 4\nb = 6\nresult = a + b",'var',{hints:["Three lines.","result should be 10."]}),
+    PQ('v:str','vars',1,"Store text","Set <code>result</code> to the text <b>hi</b>.","result = 'hi'",'var',{hints:["Text needs quotes.","<code>result = 'hi'</code>"]}),
+    PQ('v:concat','vars',2,"Join two words","Set <code>result</code> to <b>hi</b> joined with <b>there</b> (so it reads <code>hithere</code>).","result = 'hi' + 'there'",'var',{hints:["Use + to join strings.","<code>result = 'hi' + 'there'</code>"]}),
+    PQ('v:div','vars',2,"True division","Set <code>result</code> to <b>100 divided by 4</b> using <code>/</code> (it gives a decimal).","result = 100 / 4",'var',{hints:["<code>/</code> always gives a decimal: 25.0.","<code>result = 100 / 4</code>"]}),
+    PQ('v:floor','vars',2,"Whole-number division","Set <code>result</code> to <b>100 // 4</b> (whole-number division — gives 25, not 25.0).","result = 100 // 4",'var',{hints:["<code>//</code> drops the decimal.","<code>result = 100 // 4</code>"]}),
+    PQ('v:bool','vars',1,"Store True","Set <code>result</code> to the boolean <b>True</b>.","result = True",'var',{hints:["True has a capital T and no quotes.","<code>result = True</code>"]}),
+    PQ('v:calc','vars',2,"Total price","Set <code>price</code> to 20 and <code>qty</code> to 3, then set <code>result</code> to <b>price times qty</b>.","price = 20\nqty = 3\nresult = price * qty",'var',{hints:["Three lines, then multiply.","result should be 60."]}),
+    PQ('v:pow','vars',2,"A power","Set <code>result</code> to <b>2 to the power of 5</b>.","result = 2 ** 5",'var',{hints:["Use <code>**</code>.","<code>result = 2 ** 5</code> (32)"]}),
+    PQ('v:mod','vars',2,"A remainder","Set <code>result</code> to the remainder of <b>9 divided by 2</b>.","result = 9 % 2",'var',{hints:["Use <code>%</code> for remainder.","<code>result = 9 % 2</code> (1)"]})
+  ];
+},
+'arithmetic':()=>{
+  const mk=(id,expr,op,opmsg,extra)=>PQ(id,'arithmetic',2,"Compute it","Write an expression for <b>"+expr.replace(/\*/g,'×').replace('//','÷(whole)').replace('%','remainder of')+"</b>.",expr,'expr',{req:op,reqMsg:opmsg,hints:["Write it as an expression using <code>"+(extra||'')+"</code>.","<code>"+expr.replace(/</g,'&lt;').replace(/>/g,'&gt;')+"</code>"]});
+  return [
+    PQ('a:add1','arithmetic',1,"Add","Write an expression that adds <b>12 and 5</b>.","12 + 5",'expr',{req:/\+/,reqMsg:"the <code>+</code> operator",hints:["Use <code>+</code>.","<code>12 + 5</code>"]}),
+    PQ('a:add2','arithmetic',1,"Add","Write an expression that adds <b>100 and 250</b>.","100 + 250",'expr',{req:/\+/,reqMsg:"<code>+</code>",hints:["<code>100 + 250</code>",""]}),
+    PQ('a:sub1','arithmetic',1,"Subtract","Write an expression for <b>40 minus 15</b>.","40 - 15",'expr',{req:/-/,reqMsg:"<code>-</code>",hints:["Use <code>-</code>.","<code>40 - 15</code>"]}),
+    PQ('a:sub2','arithmetic',1,"Subtract","Write an expression for <b>1000 minus 1</b>.","1000 - 1",'expr',{req:/-/,reqMsg:"<code>-</code>",hints:["<code>1000 - 1</code>",""]}),
+    PQ('a:mul1','arithmetic',1,"Multiply","Write an expression for <b>6 times 7</b>.","6 * 7",'expr',{req:/\*/,reqMsg:"<code>*</code>",hints:["Use <code>*</code>.","<code>6 * 7</code>"]}),
+    PQ('a:mul2','arithmetic',1,"Multiply","Write an expression for <b>12 times 12</b>.","12 * 12",'expr',{req:/\*/,reqMsg:"<code>*</code>",hints:["<code>12 * 12</code>",""]}),
+    PQ('a:div1','arithmetic',2,"Divide","Write an expression for <b>20 divided by 4</b> with <code>/</code> (decimal result).","20 / 4",'expr',{req:/\//,reqMsg:"<code>/</code>",hints:["<code>/</code> gives 5.0.","<code>20 / 4</code>"]}),
+    PQ('a:div2','arithmetic',2,"Divide","Write an expression for <b>9 divided by 2</b> with <code>/</code>.","9 / 2",'expr',{req:/\//,reqMsg:"<code>/</code>",hints:["Gives 4.5.","<code>9 / 2</code>"]}),
+    PQ('a:floor1','arithmetic',2,"Whole-number divide","Write an expression for <b>17 // 3</b> (whole-number division).","17 // 3",'expr',{req:/\/\//,reqMsg:"<code>//</code>",hints:["Use <code>//</code>.","<code>17 // 3</code> (5)"]}),
+    PQ('a:floor2','arithmetic',2,"Whole-number divide","Write an expression for <b>100 // 7</b>.","100 // 7",'expr',{req:/\/\//,reqMsg:"<code>//</code>",hints:["<code>100 // 7</code> (14)",""]}),
+    PQ('a:mod1','arithmetic',2,"Remainder","Write an expression for the remainder of <b>17 divided by 5</b>.","17 % 5",'expr',{req:/%/,reqMsg:"<code>%</code>",hints:["Use <code>%</code>.","<code>17 % 5</code> (2)"]}),
+    PQ('a:mod2','arithmetic',2,"Remainder","Write an expression for the remainder of <b>100 divided by 9</b>.","100 % 9",'expr',{req:/%/,reqMsg:"<code>%</code>",hints:["<code>100 % 9</code> (1)",""]}),
+    PQ('a:pow1','arithmetic',2,"Power","Write an expression for <b>2 to the power of 8</b>.","2 ** 8",'expr',{req:/\*\*/,reqMsg:"<code>**</code>",hints:["Use <code>**</code>.","<code>2 ** 8</code> (256)"]}),
+    PQ('a:pow2','arithmetic',2,"Power","Write an expression for <b>5 to the power of 3</b>.","5 ** 3",'expr',{req:/\*\*/,reqMsg:"<code>**</code>",hints:["<code>5 ** 3</code> (125)",""]}),
+    PQ('a:prec','arithmetic',3,"Order of operations","Write <b>2 + 3 * 4</b> as one expression — Python does × before +, so the answer is 14.","2 + 3 * 4",'expr',{req:/\*/,reqMsg:"<code>*</code>",hints:["Multiplication happens first.","<code>2 + 3 * 4</code> (14)"]}),
+    PQ('a:paren','arithmetic',3,"Parentheses","Use brackets so the add happens first: compute <b>(2 + 3) then × 4</b> (answer 20).","(2 + 3) * 4",'expr',{req:/\(/,reqMsg:"parentheses",hints:["Brackets force the order.","<code>(2 + 3) * 4</code> (20)"]})
+  ];
+},
+'strings':()=>{
+  return [
+    PQ('s:concat','strings',1,"Join words","Write an expression joining <b>foo</b> and <b>bar</b> into <code>foobar</code>.","'foo' + 'bar'",'expr',{req:/\+/,reqMsg:"<code>+</code>",hints:["Use + between two strings.","<code>'foo' + 'bar'</code>"]}),
+    PQ('s:repeat','strings',1,"Repeat text","Write an expression that repeats <b>ab</b> three times (<code>ababab</code>).","'ab' * 3",'expr',{req:/\*/,reqMsg:"<code>*</code>",hints:["Use * with a number.","<code>'ab' * 3</code>"]}),
+    PQ('s:len1','strings',1,"Length","Write an expression for the length of <b>hello</b>.","len('hello')",'expr',{req:/len/,reqMsg:"<code>len()</code>",hints:["Use len().","<code>len('hello')</code> (5)"]}),
+    PQ('s:len2','strings',1,"Length","Write an expression for the length of <b>Querious</b>.","len('Querious')",'expr',{req:/len/,reqMsg:"<code>len()</code>",hints:["<code>len('Querious')</code> (8)",""]}),
+    PQ('s:idx0','strings',2,"First letter","Write an expression for the <b>first</b> character of <b>Python</b>.","'Python'[0]",'expr',{req:/\[/,reqMsg:"indexing <code>[ ]</code>",hints:["Counting starts at 0.","<code>'Python'[0]</code>"]}),
+    PQ('s:idxlast','strings',2,"Last letter","Write an expression for the <b>last</b> character of <b>Python</b> (use -1).","'Python'[-1]",'expr',{req:/\[/,reqMsg:"indexing <code>[ ]</code>",hints:["Negative indexes count from the end.","<code>'Python'[-1]</code>"]}),
+    PQ('s:slice1','strings',2,"First three","Write an expression for the first three characters of <b>Python</b>.","'Python'[0:3]",'expr',{req:/:/,reqMsg:"a slice <code>[a:b]</code>",hints:["Slice [0:3].","<code>'Python'[0:3]</code>"]}),
+    PQ('s:slice2','strings',2,"From the third","Write an expression for <b>Querious</b> from index 2 to the end.","'Querious'[2:]",'expr',{req:/:/,reqMsg:"a slice",hints:["Leave the end empty.","<code>'Querious'[2:]</code>"]}),
+    PQ('s:upper','strings',2,"Shout it","Write an expression that turns <b>hello</b> into <b>HELLO</b>.","'hello'.upper()",'expr',{req:/upper/,reqMsg:"<code>.upper()</code>",hints:["Use the .upper() method.","<code>'hello'.upper()</code>"]}),
+    PQ('s:lower','strings',2,"Quieten it","Write an expression that turns <b>HELLO</b> into <b>hello</b>.","'HELLO'.lower()",'expr',{req:/lower/,reqMsg:"<code>.lower()</code>",hints:["Use .lower().","<code>'HELLO'.lower()</code>"]}),
+    PQ('s:title','strings',2,"Title case","Write an expression that turns <b>hello world</b> into <b>Hello World</b>.","'hello world'.title()",'expr',{req:/title/,reqMsg:"<code>.title()</code>",hints:["Use .title().","<code>'hello world'.title()</code>"]}),
+    PQ('s:strip','strings',2,"Trim spaces","Write an expression that strips the spaces around <b>'  hi  '</b> to give <code>hi</code>.","'  hi  '.strip()",'expr',{req:/strip/,reqMsg:"<code>.strip()</code>",hints:["Use .strip().","<code>'  hi  '.strip()</code>"]}),
+    PQ('s:replace','strings',2,"Swap letters","Write an expression that turns <b>cat</b> into <b>bat</b> by replacing c with b.","'cat'.replace('c', 'b')",'expr',{req:/replace/,reqMsg:"<code>.replace()</code>",hints:["Use .replace(old, new).","<code>'cat'.replace('c', 'b')</code>"]}),
+    PQ('s:fstring','strings',3,"f-string","Use an f-string to build the text <b>sum is 7</b> by computing 3 + 4 inside it.","f'sum is {3 + 4}'",'expr',{req:/f['\"]/,reqMsg:"an f-string",hints:["Put an f before the quote and code in {curly braces}.","<code>f'sum is {3 + 4}'</code>"]}),
+    PQ('s:in','strings',2,"Contains?","Write an expression that is True if <b>y</b> is in <b>Python</b>.","'y' in 'Python'",'expr',{req:/\bin\b/,reqMsg:"<code>in</code>",hints:["Use the in keyword.","<code>'y' in 'Python'</code>"]}),
+    PQ('s:starts','strings',2,"Starts with?","Write an expression that is True if <b>Python</b> starts with <b>Py</b>.","'Python'.startswith('Py')",'expr',{req:/startswith/,reqMsg:"<code>.startswith()</code>",hints:["Use .startswith().","<code>'Python'.startswith('Py')</code>"]}),
+    PQ('s:count','strings',2,"Count a letter","Write an expression for how many times <b>a</b> appears in <b>banana</b>.","'banana'.count('a')",'expr',{req:/count/,reqMsg:"<code>.count()</code>",hints:["Use .count().","<code>'banana'.count('a')</code> (3)"]}),
+    PQ('s:lenconcat','strings',2,"Length of a join","Write an expression for the length of <b>a + b + c</b> joined together.","len('a' + 'b' + 'c')",'expr',{req:/len/,reqMsg:"<code>len()</code>",hints:["Join first, then len().","<code>len('a' + 'b' + 'c')</code> (3)"]})
+  ];
+},
+'booleans':()=>{
+  return [
+    PQ('b:eq','booleans',1,"Equal?","Write an expression that checks whether <b>5 equals 5</b>.","5 == 5",'expr',{req:/==/,reqMsg:"<code>==</code>",hints:["Equality is two equals signs.","<code>5 == 5</code>"]}),
+    PQ('b:ne','booleans',1,"Not equal?","Write an expression that checks whether <b>5 is not equal to 3</b>.","5 != 3",'expr',{req:/!=/,reqMsg:"<code>!=</code>",hints:["Not-equal is <code>!=</code>.","<code>5 != 3</code>"]}),
+    PQ('b:lt','booleans',1,"Less than?","Write an expression that checks whether <b>3 is less than 5</b>.","3 < 5",'expr',{req:/</,reqMsg:"<code>&lt;</code>",hints:["Use <code>&lt;</code>.","<code>3 &lt; 5</code>"]}),
+    PQ('b:gt','booleans',1,"Greater than?","Write an expression that checks whether <b>9 is greater than 2</b>.","9 > 2",'expr',{req:/>/,reqMsg:"<code>&gt;</code>",hints:["Use <code>&gt;</code>.","<code>9 &gt; 2</code>"]}),
+    PQ('b:ge','booleans',2,"At least?","Write an expression that checks whether <b>5 is greater than or equal to 5</b>.","5 >= 5",'expr',{req:/>=/,reqMsg:"<code>&gt;=</code>",hints:["Use <code>&gt;=</code>.","<code>5 &gt;= 5</code>"]}),
+    PQ('b:le','booleans',2,"At most?","Write an expression that checks whether <b>4 is less than or equal to 3</b> (it's False).","4 <= 3",'expr',{req:/<=/,reqMsg:"<code>&lt;=</code>",hints:["Use <code>&lt;=</code>.","<code>4 &lt;= 3</code>"]}),
+    PQ('b:and','booleans',2,"Both true?","Write an expression: <b>True and False</b>.","True and False",'expr',{req:/\band\b/,reqMsg:"<code>and</code>",hints:["and needs both sides true.","<code>True and False</code>"]}),
+    PQ('b:or','booleans',2,"Either true?","Write an expression: <b>True or False</b>.","True or False",'expr',{req:/\bor\b/,reqMsg:"<code>or</code>",hints:["or needs either side true.","<code>True or False</code>"]}),
+    PQ('b:not','booleans',2,"Flip it","Write an expression that flips <b>True</b> to False using not.","not True",'expr',{req:/\bnot\b/,reqMsg:"<code>not</code>",hints:["not flips a boolean.","<code>not True</code>"]}),
+    PQ('b:in','booleans',2,"In the list?","Write an expression that checks whether <b>3 is in [1, 2, 3]</b>.","3 in [1, 2, 3]",'expr',{req:/\bin\b/,reqMsg:"<code>in</code>",hints:["Use in.","<code>3 in [1, 2, 3]</code>"]}),
+    PQ('b:notin','booleans',2,"Not in the list?","Write an expression that checks whether <b>5 is NOT in [1, 2, 3]</b>.","5 not in [1, 2, 3]",'expr',{req:/not in/,reqMsg:"<code>not in</code>",hints:["Use not in.","<code>5 not in [1, 2, 3]</code>"]}),
+    PQ('b:combo','booleans',3,"Combine","Write an expression: <b>(2 > 1) and (3 > 2)</b>.","(2 > 1) and (3 > 2)",'expr',{req:/\band\b/,reqMsg:"<code>and</code>",hints:["Two comparisons joined by and.","<code>(2 &gt; 1) and (3 &gt; 2)</code>"]}),
+    PQ('b:streq','booleans',1,"Same text?","Write an expression that checks whether <b>'a' equals 'a'</b>.","'a' == 'a'",'expr',{req:/==/,reqMsg:"<code>==</code>",hints:["Strings compare with ==.","<code>'a' == 'a'</code>"]}),
+    PQ('b:even','booleans',3,"Is it even?","Write an expression that is True when <b>10 has no remainder mod 2</b>.","10 % 2 == 0",'expr',{req:/==/,reqMsg:"<code>==</code>",hints:["Remainder 0 means even.","<code>10 % 2 == 0</code>"]}),
+    PQ('b:or2','booleans',3,"Either side","Write an expression: <b>(5 > 3) or (1 > 9)</b>.","(5 > 3) or (1 > 9)",'expr',{req:/\bor\b/,reqMsg:"<code>or</code>",hints:["or is true if either is.","<code>(5 &gt; 3) or (1 &gt; 9)</code>"]}),
+    PQ('b:noteq','booleans',3,"Not equal, with not","Write an expression using <b>not</b> that is True because 2 does not equal 3.","not (2 == 3)",'expr',{req:/\bnot\b/,reqMsg:"<code>not</code>",hints:["Wrap a comparison in not(...).","<code>not (2 == 3)</code>"]})
+  ];
+}
+};
+Object.assign(PY_FAMILIES,{
+'conditionals':()=>{
+  const rq={req:/\bif\b/,reqMsg:"an <code>if</code> statement"};
+  return [
+    PQ('c:pos','conditionals',2,"Positive?","Write <code>f(x)</code> that returns <b>'positive'</b> when x is greater than 0, otherwise <b>'non-positive'</b>.","def f(x):\n    if x > 0:\n        return 'positive'\n    else:\n        return 'non-positive'",'func',{...rq,cases:[[5],[-3],[0]],hints:["Use if x > 0: ... else: ...","Return the strings shown."]}),
+    PQ('c:even','conditionals',2,"Even or odd","Write <code>f(n)</code> that returns <b>'even'</b> if n is even, else <b>'odd'</b>.","def f(n):\n    if n % 2 == 0:\n        return 'even'\n    else:\n        return 'odd'",'func',{...rq,cases:[[4],[7],[0]],hints:["Even means n % 2 == 0.","if/else on the remainder."]}),
+    PQ('c:sign','conditionals',3,"Three-way sign","Write <code>f(x)</code> returning <b>'positive'</b>, <b>'negative'</b> or <b>'zero'</b>.","def f(x):\n    if x > 0:\n        return 'positive'\n    elif x < 0:\n        return 'negative'\n    else:\n        return 'zero'",'func',{...rq,cases:[[5],[-2],[0]],hints:["Use if / elif / else.","Three branches."]}),
+    PQ('c:max2','conditionals',2,"Larger of two","Write <code>f(a, b)</code> that returns the larger value (return a if equal).","def f(a, b):\n    if a >= b:\n        return a\n    else:\n        return b",'func',{...rq,cases:[[3,5],[9,2],[4,4]],hints:["Compare a and b.","Return whichever is bigger."]}),
+    PQ('c:pass','conditionals',2,"Pass or fail","Write <code>f(score)</code> returning <b>'pass'</b> if score is 50 or more, else <b>'fail'</b>.","def f(score):\n    if score >= 50:\n        return 'pass'\n    else:\n        return 'fail'",'func',{...rq,cases:[[50],[49],[80]],hints:["Threshold is >= 50.","if/else."]}),
+    PQ('c:abs','conditionals',3,"Absolute value","Write <code>f(x)</code> that returns x without its sign (e.g. -5 → 5) using an if — not the built-in abs.","def f(x):\n    if x < 0:\n        return -x\n    else:\n        return x",'func',{...rq,cases:[[-5],[3],[0]],hints:["If x is negative, return -x.","Otherwise return x."]}),
+    PQ('c:grade','conditionals',3,"Letter grade","Write <code>f(s)</code> returning <b>'A'</b> (90+), <b>'B'</b> (80+), <b>'C'</b> (70+), else <b>'F'</b>.","def f(s):\n    if s >= 90:\n        return 'A'\n    elif s >= 80:\n        return 'B'\n    elif s >= 70:\n        return 'C'\n    else:\n        return 'F'",'func',{...rq,cases:[[95],[85],[72],[50]],hints:["Check highest threshold first.","if / elif / elif / else."]}),
+    PQ('c:big','conditionals',2,"Big or small","Write <code>f(n)</code> returning <b>'big'</b> if n is over 10, else <b>'small'</b>.","def f(n):\n    if n > 10:\n        return 'big'\n    else:\n        return 'small'",'func',{...rq,cases:[[20],[5],[10]],hints:["Over 10 means n > 10.","if/else."]}),
+    PQ('c:fizz','conditionals',3,"Fizz","Write <code>f(n)</code> returning <b>'fizz'</b> if n divides by 3, otherwise the number as text (use str(n)).","def f(n):\n    if n % 3 == 0:\n        return 'fizz'\n    else:\n        return str(n)",'func',{...rq,cases:[[3],[4],[9]],hints:["Divisible by 3: n % 3 == 0.","Otherwise return str(n)."]}),
+    PQ('c:clamp','conditionals',3,"Cap at 100","Write <code>f(x)</code> that returns 100 if x is over 100, otherwise x.","def f(x):\n    if x > 100:\n        return 100\n    else:\n        return x",'func',{...rq,cases:[[150],[50],[100]],hints:["Cap large values.","if x > 100: return 100."]}),
+    PQ('c:adult','conditionals',2,"Adult?","Write <code>f(age)</code> returning <b>'adult'</b> if age is 18 or more, else <b>'minor'</b>.","def f(age):\n    if age >= 18:\n        return 'adult'\n    else:\n        return 'minor'",'func',{...rq,cases:[[18],[10],[40]],hints:["Threshold 18.","if/else."]}),
+    PQ('c:max3','conditionals',4,"Largest of three","Write <code>f(a, b, c)</code> returning the largest of the three.","def f(a, b, c):\n    if a >= b and a >= c:\n        return a\n    elif b >= c:\n        return b\n    else:\n        return c",'func',{...rq,cases:[[1,2,3],[9,1,4],[5,5,2]],hints:["Compare a against b and c first.","if / elif / else."]}),
+    PQ('c:discount','conditionals',3,"Bulk discount","Write <code>f(total)</code> returning total times 0.9 if total is 100 or more, else total.","def f(total):\n    if total >= 100:\n        return total * 0.9\n    else:\n        return total",'func',{...rq,cases:[[100],[50]],hints:["10% off at 100+.","Return total * 0.9 or total."]}),
+    PQ('c:temp','conditionals',3,"Weather word","Write <code>f(t)</code> returning <b>'hot'</b> (30+), <b>'warm'</b> (20+), else <b>'cold'</b>.","def f(t):\n    if t >= 30:\n        return 'hot'\n    elif t >= 20:\n        return 'warm'\n    else:\n        return 'cold'",'func',{...rq,cases:[[35],[25],[10]],hints:["Highest threshold first.","if / elif / else."]}),
+    PQ('c:signnum','conditionals',3,"Sign as a number","Write <code>f(x)</code> returning <b>1</b> if positive, <b>-1</b> if negative, <b>0</b> if zero.","def f(x):\n    if x > 0:\n        return 1\n    elif x < 0:\n        return -1\n    else:\n        return 0",'func',{...rq,cases:[[5],[-3],[0]],hints:["Three branches returning numbers.","if / elif / else."]}),
+    PQ('c:longer','conditionals',3,"Longer string","Write <code>f(a, b)</code> returning the longer of two strings (a if equal length).","def f(a, b):\n    if len(a) >= len(b):\n        return a\n    else:\n        return b",'func',{...rq,cases:[["hi","hey"],["abc","xy"]],hints:["Compare len(a) and len(b).","Return the longer string."]})
+  ];
+},
+'lists':()=>{
+  return [
+    PQ('l:make','lists',1,"Make a list","Write a list literal containing <b>1, 2, 3</b>.","[1, 2, 3]",'expr',{req:/\[/,reqMsg:"a list <code>[ ]</code>",hints:["Square brackets, comma-separated.","<code>[1, 2, 3]</code>"]}),
+    PQ('l:len','lists',1,"List length","Write an expression for the length of <b>[4, 5, 6]</b>.","len([4, 5, 6])",'expr',{req:/len/,reqMsg:"<code>len()</code>",hints:["Use len().","<code>len([4, 5, 6])</code> (3)"]}),
+    PQ('l:idx','lists',2,"Pick an item","Write an expression for the item at index <b>1</b> of <b>[10, 20, 30]</b>.","[10, 20, 30][1]",'expr',{req:/\[/,reqMsg:"indexing",hints:["Index 1 is the second item.","<code>[10, 20, 30][1]</code> (20)"]}),
+    PQ('l:last','lists',2,"Last item","Write an expression for the <b>last</b> item of <b>[10, 20, 30]</b> using -1.","[10, 20, 30][-1]",'expr',{req:/\[/,reqMsg:"indexing",hints:["Negative index from the end.","<code>[10, 20, 30][-1]</code>"]}),
+    PQ('l:slice','lists',2,"Slice","Write an expression for items at index 1 and 2 of <b>[1, 2, 3, 4, 5]</b>.","[1, 2, 3, 4, 5][1:3]",'expr',{req:/:/,reqMsg:"a slice",hints:["Slice [1:3].","<code>[1, 2, 3, 4, 5][1:3]</code> ([2, 3])"]}),
+    PQ('l:sum','lists',1,"Sum a list","Write an expression for the sum of <b>[1, 2, 3, 4]</b>.","sum([1, 2, 3, 4])",'expr',{req:/sum/,reqMsg:"<code>sum()</code>",hints:["Use sum().","<code>sum([1, 2, 3, 4])</code> (10)"]}),
+    PQ('l:max','lists',1,"Largest","Write an expression for the largest of <b>[3, 7, 2]</b>.","max([3, 7, 2])",'expr',{req:/max/,reqMsg:"<code>max()</code>",hints:["Use max().","<code>max([3, 7, 2])</code> (7)"]}),
+    PQ('l:min','lists',1,"Smallest","Write an expression for the smallest of <b>[3, 7, 2]</b>.","min([3, 7, 2])",'expr',{req:/min/,reqMsg:"<code>min()</code>",hints:["Use min().","<code>min([3, 7, 2])</code> (2)"]}),
+    PQ('l:sorted','lists',2,"Sort it","Write an expression that sorts <b>[3, 1, 2]</b> ascending.","sorted([3, 1, 2])",'expr',{req:/sorted/,reqMsg:"<code>sorted()</code>",hints:["Use sorted().","<code>sorted([3, 1, 2])</code>"]}),
+    PQ('l:sortdesc','lists',3,"Sort descending","Write an expression that sorts <b>[1, 3, 2]</b> biggest-first (use reverse=True).","sorted([1, 3, 2], reverse=True)",'expr',{req:/reverse/,reqMsg:"<code>reverse=True</code>",hints:["Add reverse=True.","<code>sorted([1, 3, 2], reverse=True)</code>"]}),
+    PQ('l:concat','lists',2,"Join lists","Write an expression that joins <b>[1, 2]</b> and <b>[3, 4]</b>.","[1, 2] + [3, 4]",'expr',{req:/\+/,reqMsg:"<code>+</code>",hints:["+ joins lists.","<code>[1, 2] + [3, 4]</code>"]}),
+    PQ('l:rep','lists',2,"Repeat a list","Write an expression for <b>[0]</b> repeated 3 times.","[0] * 3",'expr',{req:/\*/,reqMsg:"<code>*</code>",hints:["* repeats a list.","<code>[0] * 3</code> ([0, 0, 0])"]}),
+    PQ('l:count','lists',2,"Count an item","Write an expression for how many <b>2</b>s are in <b>[1, 2, 2, 3]</b>.","[1, 2, 2, 3].count(2)",'expr',{req:/count/,reqMsg:"<code>.count()</code>",hints:["Use .count().","<code>[1, 2, 2, 3].count(2)</code> (2)"]}),
+    PQ('l:range','lists',2,"Range to list","Write an expression for the list of numbers 0 to 4 using range.","list(range(5))",'expr',{req:/range/,reqMsg:"<code>range()</code>",hints:["Wrap range in list().","<code>list(range(5))</code>"]}),
+    PQ('l:lenconcat','lists',2,"Length after join","Write an expression for the length of <b>[1, 2, 3] + [4, 5]</b>.","len([1, 2, 3] + [4, 5])",'expr',{req:/len/,reqMsg:"<code>len()</code>",hints:["Join then len().","<code>len([1, 2, 3] + [4, 5])</code> (5)"]}),
+    PQ('l:sortwords','lists',2,"Sort words","Write an expression that sorts <b>['banana', 'apple', 'cherry']</b> alphabetically.","sorted(['banana', 'apple', 'cherry'])",'expr',{req:/sorted/,reqMsg:"<code>sorted()</code>",hints:["sorted() works on strings too.","Alphabetical order."]}),
+    PQ('l:slice2','lists',2,"First two","Write an expression for the first two items of <b>[5, 3, 9, 1]</b>.","[5, 3, 9, 1][0:2]",'expr',{req:/:/,reqMsg:"a slice",hints:["Slice [0:2].","<code>[5, 3, 9, 1][0:2]</code>"]}),
+    PQ('l:max2','lists',1,"Biggest of four","Write an expression for the largest of <b>[10, 4, 22, 7]</b>.","max([10, 4, 22, 7])",'expr',{req:/max/,reqMsg:"<code>max()</code>",hints:["Use max().","<code>max([10, 4, 22, 7])</code> (22)"]})
+  ];
+},
+'loops':()=>{
+  const rq={req:/\b(for|while)\b/,reqMsg:"a loop (<code>for</code> or <code>while</code>)"};
+  return [
+    PQ('lo:sumn','loops',2,"Sum 1 to n","Write <code>f(n)</code> that returns the sum of all whole numbers from 1 to n.","def f(n):\n    total = 0\n    for i in range(1, n + 1):\n        total += i\n    return total",'func',{...rq,cases:[[5],[10],[1]],hints:["Loop with range(1, n + 1) and add up.","Start total at 0."]}),
+    PQ('lo:sumlist','loops',2,"Sum a list (loop)","Write <code>f(lst)</code> that adds up a list of numbers using a loop.","def f(lst):\n    total = 0\n    for x in lst:\n        total += x\n    return total",'func',{...rq,cases:[[[1,2,3]],[[10,20]],[[]]],hints:["Loop over the items.","Accumulate into total."]}),
+    PQ('lo:product','loops',3,"Multiply a list","Write <code>f(lst)</code> that multiplies all numbers in a list together.","def f(lst):\n    result = 1\n    for x in lst:\n        result *= x\n    return result",'func',{...rq,cases:[[[1,2,3,4]],[[2,5]]],hints:["Start result at 1, multiply each item.","result *= x"]}),
+    PQ('lo:evens','loops',3,"Count evens","Write <code>f(lst)</code> that counts how many numbers in the list are even.","def f(lst):\n    count = 0\n    for x in lst:\n        if x % 2 == 0:\n            count += 1\n    return count",'func',{...rq,cases:[[[1,2,3,4]],[[2,4,6]],[[1,3]]],hints:["Loop, check x % 2 == 0, count.","Combine a loop with an if."]}),
+    PQ('lo:maxloop','loops',3,"Largest (loop)","Write <code>f(lst)</code> that finds the largest number using a loop (not max).","def f(lst):\n    best = lst[0]\n    for x in lst:\n        if x > best:\n            best = x\n    return best",'func',{...rq,cases:[[[3,7,2]],[[9,1,5]]],hints:["Track the best so far.","Update when you see something bigger."]}),
+    PQ('lo:fact','loops',3,"Factorial","Write <code>f(n)</code> that returns n! (1×2×…×n; f(0) is 1).","def f(n):\n    result = 1\n    for i in range(1, n + 1):\n        result *= i\n    return result",'func',{...rq,cases:[[5],[0],[3]],hints:["Multiply 1..n.","range(1, n + 1)."]}),
+    PQ('lo:vowels','loops',3,"Count vowels","Write <code>f(s)</code> that counts the vowels (aeiou) in a string.","def f(s):\n    count = 0\n    for c in s:\n        if c in 'aeiou':\n            count += 1\n    return count",'func',{...rq,cases:[["hello"],["sky"],["aeiou"]],hints:["Loop the characters; check c in 'aeiou'.","Count matches."]}),
+    PQ('lo:reverse','loops',3,"Reverse a string","Write <code>f(s)</code> that returns the string reversed, building it with a loop.","def f(s):\n    result = ''\n    for c in s:\n        result = c + result\n    return result",'func',{...rq,cases:[["abc"],["hi"]],hints:["Prepend each character.","result = c + result"]}),
+    PQ('lo:sumsq','loops',3,"Sum of squares","Write <code>f(n)</code> that returns 1² + 2² + … + n².","def f(n):\n    total = 0\n    for i in range(1, n + 1):\n        total += i * i\n    return total",'func',{...rq,cases:[[3],[1]],hints:["Add i*i each step.","range(1, n + 1)."]}),
+    PQ('lo:countx','loops',3,"Count occurrences","Write <code>f(lst, x)</code> that counts how many times x appears in lst, using a loop.","def f(lst, x):\n    count = 0\n    for item in lst:\n        if item == x:\n            count += 1\n    return count",'func',{...rq,cases:[[[1,2,2,3],2],[[5,5,5],5]],hints:["Loop and compare each item to x.","Count the matches."]}),
+    PQ('lo:repeat','loops',2,"Repeat (loop)","Write <code>f(s, n)</code> that returns s repeated n times, built with a loop.","def f(s, n):\n    result = ''\n    for i in range(n):\n        result += s\n    return result",'func',{...rq,cases:[["ab",3],["x",5]],hints:["Add s each pass.","Loop range(n)."]}),
+    PQ('lo:evenlist','loops',3,"First n evens","Write <code>f(n)</code> that returns a list of the first n even numbers starting at 0.","def f(n):\n    result = []\n    for i in range(n):\n        result.append(i * 2)\n    return result",'func',{...rq,cases:[[3],[1]],hints:["Append i*2 each pass.","Use result.append(...)."]}),
+    PQ('lo:sumeven','loops',3,"Sum the evens","Write <code>f(lst)</code> that sums only the even numbers in a list.","def f(lst):\n    total = 0\n    for x in lst:\n        if x % 2 == 0:\n            total += x\n    return total",'func',{...rq,cases:[[[1,2,3,4]],[[2,4,6]]],hints:["Loop, if even, add.","x % 2 == 0"]}),
+    PQ('lo:countdown','loops',3,"Countdown list","Write <code>f(n)</code> that returns [n, n-1, …, 1].","def f(n):\n    result = []\n    for i in range(n, 0, -1):\n        result.append(i)\n    return result",'func',{...rq,cases:[[3],[1]],hints:["range(n, 0, -1) counts down.","Append each."]}),
+    PQ('lo:totallen','loops',3,"Total length","Write <code>f(lst)</code> that returns the total length of all strings in a list.","def f(lst):\n    total = 0\n    for s in lst:\n        total += len(s)\n    return total",'func',{...rq,cases:[[["a","bb","ccc"]]],hints:["Add len(s) for each string.","Loop the list."]}),
+    PQ('lo:fib','loops',4,"Fibonacci","Write <code>f(n)</code> that returns the n-th Fibonacci number (f(0)=0, f(1)=1, f(6)=8).","def f(n):\n    a, b = 0, 1\n    for i in range(n):\n        a, b = b, a + b\n    return a",'func',{...rq,cases:[[6],[0],[1]],hints:["Track two values and roll forward.","a, b = b, a + b"]}),
+    PQ('lo:whilesum','loops',3,"While countdown","Write <code>f(n)</code> that sums 1..n using a <b>while</b> loop.","def f(n):\n    total = 0\n    while n > 0:\n        total += n\n        n -= 1\n    return total",'func',{...rq,cases:[[5],[1]],hints:["while n > 0: add n, then n -= 1.","Decrease n each pass."]}),
+    PQ('lo:avg','loops',3,"Whole-number average","Write <code>f(lst)</code> returning the average of a list, rounded down (sum // count). Use a loop for the sum.","def f(lst):\n    total = 0\n    for x in lst:\n        total += x\n    return total // len(lst)",'func',{...rq,cases:[[[2,4,6]],[[10,20,30]]],hints:["Sum with a loop, then // len(lst).","Floor division for a whole number."]})
+  ];
+},
+'dicts':()=>{
+  return [
+    PQ('d:make','dicts',2,"Make a dict","Write a dict with key <b>'a'</b> → 1 and <b>'b'</b> → 2.","{'a': 1, 'b': 2}",'expr',{req:/\{/,reqMsg:"a dict <code>{ }</code>",hints:["Curly braces, key: value pairs.","<code>{'a': 1, 'b': 2}</code>"]}),
+    PQ('d:get','dicts',2,"Look up a key","Write an expression for the value at key <b>'x'</b> in <b>{'x': 10, 'y': 20}</b>.","{'x': 10, 'y': 20}['x']",'expr',{req:/\[/,reqMsg:"key lookup <code>[ ]</code>",hints:["Use [key].","<code>{'x': 10, 'y': 20}['x']</code> (10)"]}),
+    PQ('d:getdef','dicts',2,"Safe lookup (missing)","Write an expression: from <b>{'x': 10}</b> get key <b>'z'</b> with a default of 0.","{'x': 10}.get('z', 0)",'expr',{req:/get/,reqMsg:"<code>.get()</code>",hints:["Use .get(key, default).","<code>{'x': 10}.get('z', 0)</code> (0)"]}),
+    PQ('d:getthere','dicts',2,"Safe lookup (present)","Write an expression: from <b>{'x': 10, 'y': 5}</b> get key <b>'y'</b> with default 0.","{'x': 10, 'y': 5}.get('y', 0)",'expr',{req:/get/,reqMsg:"<code>.get()</code>",hints:["Use .get().","<code>{'x': 10, 'y': 5}.get('y', 0)</code> (5)"]}),
+    PQ('d:keys','dicts',2,"Sorted keys","Write an expression for the sorted list of keys of <b>{'a': 1, 'b': 2}</b>.","sorted({'a': 1, 'b': 2}.keys())",'expr',{req:/keys/,reqMsg:"<code>.keys()</code>",hints:["Wrap .keys() in sorted().","<code>sorted({'a': 1, 'b': 2}.keys())</code>"]}),
+    PQ('d:values','dicts',2,"Sorted values","Write an expression for the sorted list of values of <b>{'a': 1, 'b': 2}</b>.","sorted({'a': 1, 'b': 2}.values())",'expr',{req:/values/,reqMsg:"<code>.values()</code>",hints:["Wrap .values() in sorted().","<code>sorted({'a': 1, 'b': 2}.values())</code>"]}),
+    PQ('d:len','dicts',1,"How many pairs","Write an expression for the number of pairs in <b>{'a': 1, 'b': 2, 'c': 3}</b>.","len({'a': 1, 'b': 2, 'c': 3})",'expr',{req:/len/,reqMsg:"<code>len()</code>",hints:["len() counts pairs.","<code>len({...})</code> (3)"]}),
+    PQ('d:in','dicts',2,"Has a key?","Write an expression that is True if <b>'a'</b> is a key in <b>{'a': 1}</b>.","'a' in {'a': 1}",'expr',{req:/\bin\b/,reqMsg:"<code>in</code>",hints:["in checks keys.","<code>'a' in {'a': 1}</code>"]}),
+    PQ('d:sumvals','dicts',2,"Sum the values","Write an expression for the sum of values of <b>{'a': 1, 'b': 2, 'c': 3}</b>.","sum({'a': 1, 'b': 2, 'c': 3}.values())",'expr',{req:/values/,reqMsg:"<code>.values()</code>",hints:["sum() over .values().","<code>sum({...}.values())</code> (6)"]}),
+    PQ('d:two','dicts',2,"Add two lookups","Write an expression: value of 'a' in {'a': 1} plus value of 'b' in {'b': 2}.","{'a': 1}['a'] + {'b': 2}['b']",'expr',{req:/\+/,reqMsg:"<code>+</code>",hints:["Two [key] lookups added.","<code>{'a': 1}['a'] + {'b': 2}['b']</code> (3)"]}),
+    PQ('d:getfn','dicts',3,"get() in a function","Write <code>f(d, k)</code> that returns the value for key k, or <b>-1</b> if it's missing.","def f(d, k):\n    return d.get(k, -1)",'func',{req:/get/,reqMsg:"<code>.get()</code>",cases:[[{a:1},"a"],[{a:1},"z"]],hints:["One line: return d.get(k, -1).","get() handles the missing key."]}),
+    PQ('d:sumfn','dicts',3,"Sum values (function)","Write <code>f(d)</code> that returns the sum of a dict's values.","def f(d):\n    return sum(d.values())",'func',{req:/values/,reqMsg:"<code>.values()</code>",cases:[[{a:1,b:2}],[{x:10}]],hints:["return sum(d.values()).",""]}),
+    PQ('d:lenfn','dicts',2,"Count pairs (function)","Write <code>f(d)</code> that returns how many key/value pairs the dict has.","def f(d):\n    return len(d)",'func',{req:/len/,reqMsg:"<code>len()</code>",cases:[[{a:1,b:2}],[{}]],hints:["return len(d).",""]}),
+    PQ('d:person','dicts',2,"Build a record","Write a dict with <b>'name'</b> → 'Ada' and <b>'age'</b> → 36.","{'name': 'Ada', 'age': 36}",'expr',{req:/\{/,reqMsg:"a dict",hints:["Two pairs.","<code>{'name': 'Ada', 'age': 36}</code>"]}),
+    PQ('d:nested','dicts',3,"Nested lookup","Write an expression for the value at <b>['p']['q']</b> in <b>{'p': {'q': 5}}</b>.","{'p': {'q': 5}}['p']['q']",'expr',{req:/\[/,reqMsg:"key lookup",hints:["Chain two lookups.","<code>{'p': {'q': 5}}['p']['q']</code> (5)"]}),
+    PQ('d:keys2','dicts',2,"Sorted keys (3)","Write an expression for the sorted keys of <b>{'b': 2, 'a': 1, 'c': 3}</b>.","sorted({'b': 2, 'a': 1, 'c': 3}.keys())",'expr',{req:/keys/,reqMsg:"<code>.keys()</code>",hints:["sorted(.keys()).","['a', 'b', 'c']"]})
+  ];
+},
+'functions':()=>{
+  const rq={req:/\bdef\b/,reqMsg:"a function with <code>def</code>"};
+  return [
+    PQ('fn:double','functions',1,"Double it","Write <code>f(x)</code> that returns x times 2.","def f(x):\n    return x * 2",'func',{...rq,cases:[[5],[0],[-3]],hints:["def f(x): return x * 2","Use return."]}),
+    PQ('fn:add','functions',1,"Add two","Write <code>f(a, b)</code> that returns their sum.","def f(a, b):\n    return a + b",'func',{...rq,cases:[[2,3],[10,-4]],hints:["return a + b","Two parameters."]}),
+    PQ('fn:square','functions',1,"Square","Write <code>f(x)</code> that returns x squared.","def f(x):\n    return x ** 2",'func',{...rq,cases:[[4],[5]],hints:["return x ** 2",""]}),
+    PQ('fn:greet','functions',2,"Greeting","Write <code>f(name)</code> that returns <b>'Hello, '</b> followed by the name.","def f(name):\n    return 'Hello, ' + name",'func',{...rq,cases:[["Ada"],["Sam"]],hints:["Join the greeting and name with +.","return 'Hello, ' + name"]}),
+    PQ('fn:area','functions',2,"Rectangle area","Write <code>f(w, h)</code> that returns the area (width × height).","def f(w, h):\n    return w * h",'func',{...rq,cases:[[3,4],[5,2]],hints:["return w * h",""]}),
+    PQ('fn:iseven','functions',2,"Is even?","Write <code>f(n)</code> that returns True when n is even.","def f(n):\n    return n % 2 == 0",'func',{...rq,cases:[[4],[7],[0]],hints:["return n % 2 == 0","It returns a boolean."]}),
+    PQ('fn:length','functions',1,"Length","Write <code>f(s)</code> that returns the length of s.","def f(s):\n    return len(s)",'func',{...rq,cases:[["hi"],["hello"]],hints:["return len(s)",""]}),
+    PQ('fn:negate','functions',1,"Negate","Write <code>f(x)</code> that returns the negative of x.","def f(x):\n    return -x",'func',{...rq,cases:[[5],[-3],[0]],hints:["return -x",""]}),
+    PQ('fn:default','functions',3,"Default argument","Write <code>f(x, n=2)</code> that returns x times n — defaulting n to 2.","def f(x, n=2):\n    return x * n",'func',{...rq,cases:[[5],[5,3]],hints:["Give n a default: def f(x, n=2).","return x * n"]}),
+    PQ('fn:last','functions',2,"Last character","Write <code>f(s)</code> that returns the last character of s.","def f(s):\n    return s[-1]",'func',{...rq,cases:[["cat"],["x"]],hints:["return s[-1]",""]}),
+    PQ('fn:avg2','functions',2,"Average of two","Write <code>f(a, b)</code> that returns their average (a decimal).","def f(a, b):\n    return (a + b) / 2",'func',{...rq,cases:[[2,4],[3,3]],hints:["return (a + b) / 2","/ gives a decimal."]}),
+    PQ('fn:cube','functions',1,"Cube","Write <code>f(x)</code> that returns x to the power 3.","def f(x):\n    return x ** 3",'func',{...rq,cases:[[2],[3]],hints:["return x ** 3",""]}),
+    PQ('fn:shout','functions',2,"Shout","Write <code>f(s)</code> that returns s in uppercase with a <b>!</b> on the end.","def f(s):\n    return s.upper() + '!'",'func',{...rq,cases:[["hi"],["yes"]],hints:["return s.upper() + '!'",""]}),
+    PQ('fn:maxof','functions',2,"Bigger of two","Write <code>f(a, b)</code> that returns the larger value (you may use max).","def f(a, b):\n    return max(a, b)",'func',{...rq,cases:[[3,9],[7,2]],hints:["return max(a, b)",""]}),
+    PQ('fn:celsius','functions',3,"To Celsius","Write <code>f(t)</code> that converts Fahrenheit to Celsius: (t - 32) × 5 / 9.","def f(t):\n    return (t - 32) * 5 / 9",'func',{...rq,cases:[[32],[212]],hints:["return (t - 32) * 5 / 9","f(32) is 0.0."]}),
+    PQ('fn:reps','functions',2,"Repeat","Write <code>f(s, n)</code> that returns s repeated n times.","def f(s, n):\n    return s * n",'func',{...rq,cases:[["ab",3],["x",5]],hints:["return s * n",""]})
+  ];
+},
+'strmethods':()=>{
+  return [
+    PQ('sm:split','strmethods',2,"Split on commas","Write an expression that splits <b>'a,b,c'</b> on commas into a list.","'a,b,c'.split(',')",'expr',{req:/split/,reqMsg:"<code>.split()</code>",hints:["Use .split(',').","<code>'a,b,c'.split(',')</code>"]}),
+    PQ('sm:join','strmethods',2,"Join with dashes","Write an expression that joins <b>['a', 'b', 'c']</b> with dashes into <code>a-b-c</code>.","'-'.join(['a', 'b', 'c'])",'expr',{req:/join/,reqMsg:"<code>.join()</code>",hints:["Call .join() on the separator.","<code>'-'.join(['a', 'b', 'c'])</code>"]}),
+    PQ('sm:find','strmethods',2,"Find a letter","Write an expression for the index of the first <b>l</b> in <b>hello</b>.","'hello'.find('l')",'expr',{req:/find/,reqMsg:"<code>.find()</code>",hints:["Use .find('l').","<code>'hello'.find('l')</code> (2)"]}),
+    PQ('sm:count','strmethods',2,"Count a letter","Write an expression for how many <b>a</b>s are in <b>banana</b>.","'banana'.count('a')",'expr',{req:/count/,reqMsg:"<code>.count()</code>",hints:["Use .count('a').","<code>'banana'.count('a')</code> (3)"]}),
+    PQ('sm:replace','strmethods',2,"Replace all","Write an expression that replaces every <b>a</b> with <b>b</b> in <b>aaa</b>.","'aaa'.replace('a', 'b')",'expr',{req:/replace/,reqMsg:"<code>.replace()</code>",hints:["Use .replace('a', 'b').","<code>'aaa'.replace('a', 'b')</code>"]}),
+    PQ('sm:starts','strmethods',2,"Starts with?","Write an expression that is True if <b>hello</b> starts with <b>he</b>.","'hello'.startswith('he')",'expr',{req:/startswith/,reqMsg:"<code>.startswith()</code>",hints:["Use .startswith('he').",""]}),
+    PQ('sm:ends','strmethods',2,"Ends with?","Write an expression that is True if <b>hello</b> ends with <b>lo</b>.","'hello'.endswith('lo')",'expr',{req:/endswith/,reqMsg:"<code>.endswith()</code>",hints:["Use .endswith('lo').",""]}),
+    PQ('sm:splitlen','strmethods',3,"Count words","Write an expression for the number of words in <b>'a b c'</b> (split on spaces, then len).","len('a b c'.split())",'expr',{req:/split/,reqMsg:"<code>.split()</code>",hints:[".split() with no argument splits on spaces.","<code>len('a b c'.split())</code> (3)"]}),
+    PQ('sm:isdigit','strmethods',2,"All digits?","Write an expression that is True because <b>'123'</b> is all digits.","'123'.isdigit()",'expr',{req:/isdigit/,reqMsg:"<code>.isdigit()</code>",hints:["Use .isdigit().",""]}),
+    PQ('sm:lower','strmethods',2,"Lowercase","Write an expression that lowercases <b>'Hi There'</b>.","'Hi There'.lower()",'expr',{req:/lower/,reqMsg:"<code>.lower()</code>",hints:["Use .lower().","'hi there'"]}),
+    PQ('sm:strip','strmethods',2,"Trim","Write an expression that trims the spaces around <b>' x '</b>.","' x '.strip()",'expr',{req:/strip/,reqMsg:"<code>.strip()</code>",hints:["Use .strip().","'x'"]}),
+    PQ('sm:splitdash','strmethods',2,"Split on dashes","Write an expression that splits <b>'a-b-c'</b> on dashes into a list.","'a-b-c'.split('-')",'expr',{req:/split/,reqMsg:"<code>.split()</code>",hints:["Use .split('-').","['a', 'b', 'c']"]})
+  ];
+},
+'listcomp':()=>{
+  const rq={req:/\bfor\b/,reqMsg:"a list comprehension"};
+  return [
+    PQ('lc:sq','listcomp',2,"Squares","Write a comprehension for the squares of 0..4: <b>[0, 1, 4, 9, 16]</b>.","[x ** 2 for x in range(5)]",'expr',{...rq,hints:["[x ** 2 for x in range(5)]",""]}),
+    PQ('lc:double','listcomp',2,"Double each","Write a comprehension that doubles each of <b>[1, 2, 3]</b>.","[x * 2 for x in [1, 2, 3]]",'expr',{...rq,hints:["[x * 2 for x in [1, 2, 3]]",""]}),
+    PQ('lc:evens','listcomp',3,"Keep evens","Write a comprehension for the even numbers in 0..9.","[x for x in range(10) if x % 2 == 0]",'expr',{...rq,hints:["Add an if at the end.","[x for x in range(10) if x % 2 == 0]"]}),
+    PQ('lc:odds','listcomp',3,"Keep odds","Write a comprehension for the odd numbers in 0..9.","[x for x in range(10) if x % 2 == 1]",'expr',{...rq,hints:["if x % 2 == 1","[1, 3, 5, 7, 9]"]}),
+    PQ('lc:upper','listcomp',2,"Uppercase letters","Write a comprehension that uppercases each character of <b>'abc'</b>.","[c.upper() for c in 'abc']",'expr',{...rq,hints:["Loop over the string.","[c.upper() for c in 'abc']"]}),
+    PQ('lc:lens','listcomp',2,"Word lengths","Write a comprehension for the lengths of <b>['a', 'bb', 'ccc']</b>.","[len(w) for w in ['a', 'bb', 'ccc']]",'expr',{...rq,hints:["[len(w) for w in ...]","[1, 2, 3]"]}),
+    PQ('lc:plus1','listcomp',2,"Add one","Write a comprehension that adds 1 to each of <b>[10, 20, 30]</b>.","[x + 1 for x in [10, 20, 30]]",'expr',{...rq,hints:["[x + 1 for x in ...]","[11, 21, 31]"]}),
+    PQ('lc:filterbig','listcomp',3,"Filter big","Write a comprehension for items over 10 in <b>[5, 12, 8, 20]</b>.","[x for x in [5, 12, 8, 20] if x > 10]",'expr',{...rq,hints:["Add if x > 10.","[12, 20]"]}),
+    PQ('lc:toint','listcomp',3,"Strings to ints","Write a comprehension turning <b>['1', '2', '3']</b> into the numbers [1, 2, 3].","[int(x) for x in ['1', '2', '3']]",'expr',{...rq,hints:["Use int(x).","[int(x) for x in ['1', '2', '3']]"]}),
+    PQ('lc:sq2','listcomp',2,"Squares 1..3","Write a comprehension for [1, 4, 9] (squares of 1..3).","[x * x for x in range(1, 4)]",'expr',{...rq,hints:["range(1, 4) is 1, 2, 3.","[x * x for x in range(1, 4)]"]}),
+    PQ('lc:words3','listcomp',3,"Three-letter words","Write a comprehension for the 3-letter words in <b>['cat', 'dog', 'elephant']</b>.","[w for w in ['cat', 'dog', 'elephant'] if len(w) == 3]",'expr',{...rq,hints:["Filter on len(w) == 3.","['cat', 'dog']"]}),
+    PQ('lc:mult3','listcomp',3,"Multiples of 3","Write a comprehension for multiples of 3 from 1 to 20.","[n for n in range(1, 21) if n % 3 == 0]",'expr',{...rq,hints:["if n % 3 == 0","[3, 6, 9, 12, 15, 18]"]}),
+    PQ('lc:neg','listcomp',2,"Negate each","Write a comprehension that negates each of <b>[1, 2, 3]</b> → [-1, -2, -3].","[-x for x in [1, 2, 3]]",'expr',{...rq,hints:["[-x for x in [1, 2, 3]]",""]}),
+    PQ('lc:gt2','listcomp',3,"Bigger than two","Write a comprehension for numbers in 0..5 that are greater than 2.","[x for x in range(6) if x > 2]",'expr',{...rq,hints:["if x > 2","[3, 4, 5]"]})
+  ];
+},
+'tuples-sets':()=>{
+  return [
+    PQ('ts:tuple','tuples-sets',2,"Make a tuple","Write a tuple containing <b>1, 2, 3</b>.","(1, 2, 3)",'expr',{req:/\(/,reqMsg:"a tuple <code>( )</code>",hints:["Round brackets.","<code>(1, 2, 3)</code>"]}),
+    PQ('ts:idx','tuples-sets',2,"Tuple index","Write an expression for the item at index 1 of <b>(10, 20, 30)</b>.","(10, 20, 30)[1]",'expr',{req:/\[/,reqMsg:"indexing",hints:["[1] like a list.","<code>(10, 20, 30)[1]</code> (20)"]}),
+    PQ('ts:dedup','tuples-sets',3,"Unique, sorted","Write an expression for the sorted unique values of <b>[1, 2, 2, 3]</b> (use set, then sorted).","sorted(set([1, 2, 2, 3]))",'expr',{req:/set/,reqMsg:"<code>set()</code>",hints:["set() removes duplicates; sorted() tidies it.","<code>sorted(set([1, 2, 2, 3]))</code>"]}),
+    PQ('ts:dedup2','tuples-sets',3,"Unique, sorted (2)","Write an expression for the sorted unique values of <b>[3, 1, 3, 2]</b>.","sorted(set([3, 1, 3, 2]))",'expr',{req:/set/,reqMsg:"<code>set()</code>",hints:["sorted(set(...))","[1, 2, 3]"]}),
+    PQ('ts:setlen','tuples-sets',3,"How many unique","Write an expression for how many unique values are in <b>[1, 1, 2, 2, 3]</b>.","len(set([1, 1, 2, 2, 3]))",'expr',{req:/set/,reqMsg:"<code>set()</code>",hints:["len(set(...)).","(3)"]}),
+    PQ('ts:inter','tuples-sets',4,"In both","Write an expression for the sorted values in <b>both</b> {1,2,3} and {2,3,4} (use & then sorted).","sorted(set([1, 2, 3]) & set([2, 3, 4]))",'expr',{req:/&/,reqMsg:"set intersection <code>&</code>",hints:["& gives the overlap.","<code>sorted(set([1, 2, 3]) & set([2, 3, 4]))</code> ([2, 3])"]}),
+    PQ('ts:union','tuples-sets',4,"In either","Write an expression for the sorted values in <b>either</b> {1,2} or {2,3} (use | then sorted).","sorted(set([1, 2]) | set([2, 3]))",'expr',{req:/\|/,reqMsg:"set union <code>|</code>",hints:["| combines sets.","[1, 2, 3]"]}),
+    PQ('ts:idx0','tuples-sets',2,"First of a pair","Write an expression for the first item of the tuple <b>(5, 10)</b>.","(5, 10)[0]",'expr',{req:/\[/,reqMsg:"indexing",hints:["[0].","(5, 10)[0] (5)"]}),
+    PQ('ts:in','tuples-sets',2,"In a tuple?","Write an expression that is True if <b>1</b> is in <b>(1, 2, 3)</b>.","1 in (1, 2, 3)",'expr',{req:/\bin\b/,reqMsg:"<code>in</code>",hints:["in works on tuples.","1 in (1, 2, 3)"]}),
+    PQ('ts:len','tuples-sets',1,"Tuple length","Write an expression for the length of <b>(4, 5, 6)</b>.","len((4, 5, 6))",'expr',{req:/len/,reqMsg:"<code>len()</code>",hints:["len((4, 5, 6)).","(3)"]})
+  ];
+},
+'dictcomp':()=>{
+  const rq={req:/\bfor\b/,reqMsg:"a dict comprehension"};
+  return [
+    PQ('dc:sq','dictcomp',3,"Number → square","Write a dict comprehension mapping each of 0..3 to its square.","{x: x ** 2 for x in range(4)}",'expr',{...rq,hints:["{x: x ** 2 for x in range(4)}","{0: 0, 1: 1, 2: 4, 3: 9}"]}),
+    PQ('dc:len','dictcomp',3,"Word → length","Write a dict comprehension mapping each word in <b>['a', 'bb', 'ccc']</b> to its length.","{w: len(w) for w in ['a', 'bb', 'ccc']}",'expr',{...rq,hints:["{w: len(w) for w in ...}","{'a': 1, 'bb': 2, 'ccc': 3}"]}),
+    PQ('dc:times10','dictcomp',3,"Number → ×10","Write a dict comprehension mapping each of <b>[1, 2, 3]</b> to itself times 10.","{x: x * 10 for x in [1, 2, 3]}",'expr',{...rq,hints:["{x: x * 10 for x in [1, 2, 3]}","{1: 10, 2: 20, 3: 30}"]}),
+    PQ('dc:zip','dictcomp',4,"Zip two lists","Write a dict comprehension pairing <b>['a', 'b']</b> with <b>[1, 2]</b> using zip.","{k: v for k, v in zip(['a', 'b'], [1, 2])}",'expr',{req:/zip/,reqMsg:"<code>zip()</code> in a comprehension",hints:["Loop over zip(keys, values).","{k: v for k, v in zip([...], [...])}"]}),
+    PQ('dc:even','dictcomp',3,"Number → is-even","Write a dict comprehension mapping each of 0..2 to whether it's even (True/False).","{x: x % 2 == 0 for x in range(3)}",'expr',{...rq,hints:["Value is a comparison.","{0: True, 1: False, 2: True}"]}),
+    PQ('dc:upper','dictcomp',3,"Letter → uppercase","Write a dict comprehension mapping each character of <b>'ab'</b> to its uppercase.","{c: c.upper() for c in 'ab'}",'expr',{...rq,hints:["{c: c.upper() for c in 'ab'}","{'a': 'A', 'b': 'B'}"]}),
+    PQ('dc:sq2','dictcomp',3,"Square these","Write a dict comprehension mapping each of <b>[2, 3, 4]</b> to its square.","{n: n * n for n in [2, 3, 4]}",'expr',{...rq,hints:["{n: n * n for n in [2, 3, 4]}","{2: 4, 3: 9, 4: 16}"]}),
+    PQ('dc:label','dictcomp',3,"Tag as even","Write a dict comprehension mapping each of <b>[2, 4, 6]</b> to the text <b>'even'</b>.","{x: 'even' for x in [2, 4, 6]}",'expr',{...rq,hints:["Value is the same string each time.","{2: 'even', 4: 'even', 6: 'even'}"]}),
+    PQ('dc:plus1','dictcomp',3,"Index → next","Write a dict comprehension mapping each of 0..2 to that number plus 1.","{i: i + 1 for i in range(3)}",'expr',{...rq,hints:["{i: i + 1 for i in range(3)}","{0: 1, 1: 2, 2: 3}"]}),
+    PQ('dc:firstchar','dictcomp',4,"Word → first letter","Write a dict comprehension mapping each word in <b>['cat', 'dog']</b> to its first letter.","{w: w[0] for w in ['cat', 'dog']}",'expr',{...rq,hints:["Value is w[0].","{'cat': 'c', 'dog': 'd'}"]})
+  ];
+}
+});
+let PY_QUESTIONS=[];
+PY_CONCEPT_ORDER.forEach((cid,ci)=>{ const pool=PY_FAMILIES[cid](); seededShuffle(pool,0xBEEF+ci); pool.slice(0,PY_QUOTA[cid]).forEach(q=>PY_QUESTIONS.push(q)); });
+PY_QUESTIONS.forEach((q,i)=>{ q.num=i+1; q.hints=[...q.hints,'Full answer:<pre class="tut-code"><code>'+escapeText(q.solution)+'</code></pre>']; });
+let PY_BYID={}; PY_QUESTIONS.forEach(q=>PY_BYID[q.id]=q);
+let PY_BYCONCEPT={}; PY_CONCEPT_ORDER.forEach(c=>PY_BYCONCEPT[c]=PY_QUESTIONS.filter(q=>q.concept===c));
+console.assert(PY_QUESTIONS.length===200,'py bank size',PY_QUESTIONS.length);
+TRACKS.python={ key:'python', label:'Python', runtime:'python',
+  concepts:PY_CONCEPT_ORDER, meta:PY_META, prereq:PY_PREREQ, quota:PY_QUOTA,
+  tutorials:PY_TUTORIALS, questions:PY_QUESTIONS, byId:PY_BYID, byConcept:PY_BYCONCEPT,
+  divider:{before:'functions',label:'Intermediate'} };
+
+
+/* ---------------- Persistent state (v3) — per-track progress ---------------- */
+const SAVE_KEY='querious.v3';
+const PROGRESS_FIELDS=['tick','focus','lastQid','totalSolved','mastery','solved','servedAt','tutsSeen','cleanStreak','struggleStreak','skipOffered','finished'];
+function defaultProgress(){return {tick:0,focus:null,lastQid:null,totalSolved:0,mastery:{},solved:{},servedAt:{},tutsSeen:{},cleanStreak:0,struggleStreak:0,skipOffered:false,finished:false};}
 let state=load();
 function load(){
-  try{const s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s&&s.v===2)return Object.assign(defaultState(),s);}catch(e){}
-  const st=defaultState();
-  try{ // migrate v1: solved lessons seed the matching skill + skip its walkthrough
-    const v1=JSON.parse(localStorage.getItem('querious.v1'));
-    if(v1&&v1.lessons){
-      const map={'select-all':'select','pick-cols':'columns','where':'where','order':'order','count':'aggregate','groupby':'group','inner-join':'inner-join','left-join':'left-join','full-join':'full-join','final':'join-group'};
-      for(const lid in v1.lessons){ if(v1.lessons[lid].solved&&map[lid]){ st.tutsSeen[map[lid]]=true; st.mastery[map[lid]]={m:0.5,n:1,last:0}; } }
-      localStorage.removeItem('querious.v1');
-    }
+  let saved=null; try{ saved=JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){}
+  if(saved&&saved.v===3){
+    const at=saved.allTracks||{};
+    at.sql=Object.assign(defaultProgress(),at.sql||{});
+    at.python=Object.assign(defaultProgress(),at.python||{});
+    const st={v:3,track:(saved.track==='python'?'python':'sql'),seenIntro:!!saved.seenIntro,seenPyIntro:!!saved.seenPyIntro,allTracks:at};
+    Object.assign(st,st.allTracks[st.track]);
+    return st;
+  }
+  // fresh, or migrate v2 (flat, SQL-only) → SQL track progress
+  let migrated=false; const sqlProg=defaultProgress();
+  try{
+    const v2=JSON.parse(localStorage.getItem('querious.v2'));
+    if(v2&&v2.v===2){ PROGRESS_FIELDS.forEach(f=>{ if(v2[f]!==undefined) sqlProg[f]=v2[f]; }); migrated=true; }
   }catch(e){}
+  const st={v:3,track:'sql',seenIntro:migrated,seenPyIntro:false,allTracks:{sql:sqlProg,python:defaultProgress()}};
+  Object.assign(st,st.allTracks.sql);
   return st;
 }
-function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(state));}catch(e){}}
+function syncFlat(){ const p=state.allTracks[state.track]; PROGRESS_FIELDS.forEach(f=>{ p[f]=state[f]; }); }
+function save(){ try{ syncFlat(); localStorage.setItem(SAVE_KEY,JSON.stringify({v:3,track:state.track,seenIntro:state.seenIntro,seenPyIntro:state.seenPyIntro,allTracks:state.allTracks})); }catch(e){} }
+function activateTrack(t){
+  if(state.track!==t) syncFlat();
+  state.track=t;
+  PROGRESS_FIELDS.forEach(f=>{ state[f]=state.allTracks[t][f]; });
+  const T=TRACKS[t];
+  CONCEPT_ORDER=T.concepts; CONCEPT_META=T.meta; PREREQ=T.prereq; QUOTA=T.quota;
+  TUTORIALS=T.tutorials; QUESTIONS=T.questions; QBYID=T.byId; QBYCONCEPT=T.byConcept; DIVIDER=T.divider;
+  lastConcept=null; lastConceptRun=0;
+  document.getElementById('prog-total').textContent=QUESTIONS.length;
+  save();
+}
 
 /* ---------------- Learner model ---------------- */
 function mstat(cid){return state.mastery[cid]||(state.mastery[cid]={m:0,n:0,last:0});}
@@ -1265,10 +1687,10 @@ function renderSkills(){
   auto.onclick=()=>{state.focus=null;save();openNext();};
   list.appendChild(auto);
   CONCEPT_ORDER.forEach(cid=>{
-    if(cid===STAGE2_START){
+    if(DIVIDER&&cid===DIVIDER.before){
       const div=document.createElement('div');
       div.className='side-title stage-divider';
-      div.textContent='Advanced · dbt-style';
+      div.textContent=DIVIDER.label;
       list.appendChild(div);
     }
     const meta=CONCEPT_META[cid],s=mstat(cid),un=unlocked(cid);
@@ -1309,18 +1731,41 @@ function failBoot(){
 function boot(){
   if('scrollRestoration' in history)history.scrollRestoration='manual';
   window.scrollTo(0,0);
-  document.getElementById('prog-total').textContent=QUESTIONS.length;
-  refreshAbility();
-  document.getElementById('reset-btn').onclick=()=>{
-    if(confirm('Erase all progress and start fresh?')){state=defaultState();save();location.reload();}
-  };
   document.getElementById('sandbox-item').onclick=openSandbox;
   document.getElementById('toast-dismiss').onclick=hideToast;
-  const resume=state.lastQid&&QBYID[state.lastQid]&&!state.solved[state.lastQid]?QBYID[state.lastQid]:null;
-  if(resume){renderSkills();openQuestion(resume);}else openNext();
-  if(!state.seenIntro){
-    showToast('👋 <b>Welcome to practice mode!</b> '+QUESTIONS.length+' questions across '+CONCEPT_ORDER.length+' skills — beginner SELECTs through advanced, dbt-style SQL. I pick each next one based on what you need; solve it and the next loads automatically. New skills always start with a walkthrough.',null,10000);
+  document.querySelectorAll('.track-btn').forEach(b=>b.onclick=()=>switchTrack(b.dataset.track));
+  document.getElementById('reset-btn').onclick=()=>{
+    if(confirm('Erase your '+TRACKS[state.track].label+' progress and start that track over? (Your other track is untouched.)')){
+      state.allTracks[state.track]=defaultProgress();
+      PROGRESS_FIELDS.forEach(f=>state[f]=state.allTracks[state.track][f]);
+      save(); location.reload();
+    }
+  };
+  enterTrack(state.track);
+}
+function switchTrack(t){ if(state.track===t||!TRACKS[t])return; clearTimeout(autoTimer);autoTimer=null; enterTrack(t); }
+function enterTrack(t){
+  activateTrack(t);
+  document.querySelectorAll('.track-btn').forEach(b=>b.classList.toggle('active',b.dataset.track===t));
+  refreshAbility();
+  const proceed=()=>{
+    view='q';
+    const resume=state.lastQid&&QBYID[state.lastQid]&&!state.solved[state.lastQid]?QBYID[state.lastQid]:null;
+    if(resume){renderSkills();openQuestion(resume);} else openNext();
+    maybeWelcome(t);
+  };
+  if(TRACKS[t].runtime==='python' && !pyReady()){
+    showPyLoading();
+    ensurePyodide().then(()=>{ hidePyLoading(); proceed(); }).catch(e=>{ console.error(e); pyLoadError(); });
+  } else proceed();
+}
+function maybeWelcome(t){
+  if(t==='sql' && !state.seenIntro){
+    showToast('👋 <b>SQL track.</b> '+QUESTIONS.length+' questions across '+CONCEPT_ORDER.length+' skills — beginner SELECTs through advanced, dbt-style SQL. Solve one and the next loads automatically; new skills start with a walkthrough.',null,9000);
     state.seenIntro=true;save();
+  } else if(t==='python' && !state.seenPyIntro){
+    showToast('🐍 <b>Python track.</b> '+QUESTIONS.length+' questions across '+CONCEPT_ORDER.length+' skills — printing through list comprehensions. Your code runs in <b>real Python</b> (Pyodide) right here. Solve one and the next loads automatically.',null,9000);
+    state.seenPyIntro=true;save();
   }
 }
 
@@ -1340,6 +1785,8 @@ function openQuestion(q,opts){
   state.lastQid=q.id;save();
   renderSkills();
   const meta=CONCEPT_META[q.concept];
+  const isPy=state.track==='python';
+  const vizBlock=(!isPy&&meta.join)?joinVizHTML():'';
   const tutActive=!!TUTORIALS[q.concept]&&(opts.tut===true||(opts.tut!==false&&!state.tutsSeen[q.concept]));
   const dots='●'.repeat(q.level)+'○'.repeat(5-q.level);
   const solvedBefore=!!state.solved[q.id];
@@ -1368,11 +1815,10 @@ function openQuestion(q,opts){
           <button class="btn run" id="tut-next">Next →</button>
         </div>
       </div>
-      ${meta.join?joinVizHTML():''}
-      ${tablesBlock}
+      ${vizBlock}
+      ${isPy?'':tablesBlock}
     </div>`;
-    renderSchema();
-    if(meta.join)initJoinViz();
+    if(!isPy){renderSchema();if(meta.join)initJoinViz();}
     initTut(q.concept);
     return;
   }
@@ -1383,8 +1829,8 @@ function openQuestion(q,opts){
         <div class="gicon">🎯</div>
         <div class="gtext"><b>Your task:</b> ${q.prompt}</div>
       </div>
-      ${meta.join?joinVizHTML():''}
-      <div class="section-label">Your query</div>
+      ${vizBlock}
+      <div class="section-label">${isPy?'Your code':'Your query'}</div>
       <div class="editor-wrap">
         <div class="editor-toolbar">
           <div class="hint-note" id="hint-note"></div>
@@ -1396,7 +1842,7 @@ function openQuestion(q,opts){
           <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
         </div>
         <div class="run-row">
-          <button class="btn run" id="run-btn">Run query ▸</button>
+          <button class="btn run" id="run-btn">${isPy?'Run code ▸':'Run query ▸'}</button>
           <span class="kbd">⌘/Ctrl + Enter</span>
           <span class="spacer" style="flex:1"></span>
           <button class="btn ghost tiny" id="skip-q">Skip ▸</button>
@@ -1405,11 +1851,11 @@ function openQuestion(q,opts){
       </div>
       <div class="result" id="result"></div>
       <div class="hints" id="hints"></div>
-      ${tablesBlock}
+      ${isPy?'':tablesBlock}
     </div>`;
-  renderSchema();
+  if(!isPy)renderSchema();
   wireEditor('');
-  if(meta.join)initJoinViz();
+  if(!isPy&&meta.join)initJoinViz();
   const rb=document.getElementById('tut-replay');
   if(rb)rb.onclick=()=>openQuestion(CURQ,{tut:true});
   document.getElementById('skip-q').onclick=()=>{showToast('Skipped — no penalty. On to the next one.',null,2500);openNext();};
@@ -1445,31 +1891,183 @@ function initTut(cid){
 }
 function renderTutStep(steps){
   const s=steps[tutStep];
-  curTutSql=s.sql||'';
+  const isPy=state.track==='python';
+  const code=s.sql||s.code||'';
+  curTutSql=code;
   document.getElementById('tut-num').textContent=tutStep+1;
   document.getElementById('tut-dots').innerHTML=steps.map((_,k)=>`<span class="tdot${k<=tutStep?' on':''}"></span>`).join('');
   let html=`<p class="blurb tut-say">${s.say}</p>`;
-  if(s.sql)html+=`<pre class="tut-code"><code>${highlight(escapeHtml(s.sql))}</code></pre>`;
+  if(code)html+=`<pre class="tut-code"><code>${(isPy?pyHighlight:highlight)(escapeHtml(code))}</code></pre>`;
   if(s.new)html+=`<div class="tut-new">🆕 New piece: <code>${escapeText(s.new)}</code></div>`;
-  if(s.sql&&s.run)html+=`<div><button class="btn tiny" id="tut-run">▶ Run it</button></div><div class="tut-result" id="tut-result"></div>`;
+  if(code&&s.run)html+=`<div><button class="btn tiny" id="tut-run">▶ Run it</button></div><div class="tut-result" id="tut-result"></div>`;
   const body=document.getElementById('tut-body');
   body.innerHTML=html;
   body.style.animation='none';void body.offsetWidth;body.style.animation='';
   const tr=document.getElementById('tut-run');
   if(tr)tr.onclick=()=>{
-    let out;
-    try{out=db.exec(s.sql);}
-    catch(e){document.getElementById('tut-result').innerHTML=`<div class="banner err"><span class="bicon">⚠️</span><span>${escapeText(e.message)}</span></div>`;return;}
-    const res=out.length?out[out.length-1]:null;
     const box=document.getElementById('tut-result');box.innerHTML='';
-    if(res)box.appendChild(renderTable(res));else box.innerHTML='<div class="empty">No rows.</div>';
+    if(isPy){
+      const r=runOne(code,{kind:'print'});
+      if(!r.ok)box.innerHTML=`<div class="banner err"><span class="bicon">⚠️</span><span>${escapeText(r.err||'error')}</span></div>`;
+      else box.appendChild(pyOut((r.out&&r.out.replace(/\n+$/,''))||'(no output)'));
+    }else{
+      let out;
+      try{out=db.exec(code);}
+      catch(e){box.innerHTML=`<div class="banner err"><span class="bicon">⚠️</span><span>${escapeText(e.message)}</span></div>`;return;}
+      const res=out.length?out[out.length-1]:null;
+      if(res)box.appendChild(renderTable(res));else box.innerHTML='<div class="empty">No rows.</div>';
+    }
     tr.textContent='▶ Run again';
   };
   document.getElementById('tut-back').style.visibility=tutStep===0?'hidden':'visible';
   document.getElementById('tut-next').textContent=tutStep===steps.length-1?'✍️ My turn — try it':'Next →';
-  if(s.keys){clearHighlights();hlKeys();}
-  else applyHighlightsFor(s.sql||'');
+  if(!isPy){ if(s.keys){clearHighlights();hlKeys();} else applyHighlightsFor(code); }
 }
+
+/* ============================================================
+   PYTHON RUNTIME (Pyodide) — lazy-loaded when the Python track opens
+   ============================================================ */
+let pyodide=null, pyodideLoading=null;
+const PY_HARNESS = `
+import io, contextlib, json
+def _canon(v):
+    if isinstance(v, dict):
+        return '{' + ', '.join(repr(k) + ': ' + _canon(v[k]) for k in sorted(v, key=lambda x: repr(x))) + '}'
+    if isinstance(v, list):
+        return '[' + ', '.join(_canon(x) for x in v) + ']'
+    if isinstance(v, tuple):
+        return '(' + ', '.join(_canon(x) for x in v) + ')'
+    if isinstance(v, set):
+        return '{' + ', '.join(sorted(_canon(x) for x in v)) + '}'
+    return repr(v)
+def _qrun(code, kind, meta):
+    ns = {}
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            if kind == 'expr':
+                return json.dumps({'ok':True,'val':_canon(eval(code, ns)),'out':buf.getvalue()})
+            exec(code, ns)
+            if kind == 'var':
+                return json.dumps({'ok':True,'val':_canon(ns.get(meta['var'])),'out':buf.getvalue()})
+            if kind == 'func':
+                f = ns.get(meta['fn'])
+                if not callable(f):
+                    return json.dumps({'ok':False,'err':'Define a function called ' + meta['fn'] + '(...)'})
+                vals = [_canon(f(*c)) for c in meta['cases']]
+                return json.dumps({'ok':True,'vals':vals,'out':buf.getvalue()})
+            return json.dumps({'ok':True,'out':buf.getvalue()})
+    except Exception as e:
+        return json.dumps({'ok':False,'err':type(e).__name__ + ': ' + str(e),'out':buf.getvalue()})
+`;
+function pyReady(){return !!pyodide;}
+function ensurePyodide(){
+  if(pyodide)return Promise.resolve(pyodide);
+  if(pyodideLoading)return pyodideLoading;
+  pyodideLoading=(async()=>{
+    if(typeof loadPyodide==='undefined')throw new Error('Pyodide loader not available');
+    const py=await loadPyodide({indexURL:'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/'});
+    py.runPython(PY_HARNESS);
+    pyodide=py; return py;
+  })();
+  return pyodideLoading;
+}
+function showPyLoading(){
+  const o=document.getElementById('overlay');
+  document.getElementById('spinner').style.display='';
+  document.getElementById('ov-title').textContent='Loading Python…';
+  document.getElementById('ov-msg').innerHTML='Fetching a real Python runtime (Pyodide). First time only — about 10&nbsp;MB — then it runs instantly.';
+  o.style.display='grid';
+}
+function hidePyLoading(){document.getElementById('overlay').style.display='none';}
+function pyLoadError(){
+  document.getElementById('spinner').style.display='none';
+  document.getElementById('ov-title').textContent='Couldn’t load Python';
+  document.getElementById('ov-msg').innerHTML='The Python runtime needs an internet connection. Check your connection, then click the Python tab again.';
+}
+function runOne(code,q){
+  try{
+    pyodide.globals.set('_code',code);
+    pyodide.globals.set('_kind',q.kind||'print');
+    pyodide.globals.set('_meta',JSON.stringify({var:q.varname||'result',fn:q.fname||'f',cases:q.cases||[]}));
+    return JSON.parse(pyodide.runPython('_qrun(_code,_kind,json.loads(_meta))'));
+  }catch(e){return {ok:false,err:String((e&&e.message)||e)};}
+}
+function pyOut(text){const w=document.createElement('div');w.className='result-scroll';const pre=document.createElement('pre');pre.className='pyout';pre.textContent=text;w.appendChild(pre);return w;}
+function pyResultNode(chk){
+  const parts=[];
+  if(chk.out)parts.push(chk.out.replace(/\n+$/,''));
+  if(chk.val!==undefined&&chk.val!==null)parts.push('→ '+chk.val);
+  if(chk.vals)parts.push('→ '+chk.vals.join(',  '));
+  return pyOut(parts.length?parts.join('\n'):'(ran — no output)');
+}
+function checkPython(q,code){
+  if(q.requires&&!q.requires.test(code))return {ok:false,msg:'This one is practising '+q.reqMsg+' — make sure your code uses it.'};
+  const got=runOne(code,q);
+  if(!got.ok)return {error:got.err||'error',out:got.out};
+  const want=runOne(q.solution,q);
+  if(q.kind==='print'){
+    const a=(got.out||'').replace(/\s+$/,''),b=(want.out||'').replace(/\s+$/,'');
+    return a===b?{ok:true,out:got.out}:{ok:false,msg:'Your printed output doesn’t match yet.',out:got.out};
+  }
+  if(q.kind==='func'){
+    const g=got.vals||[],w=want.vals||[];let bad=-1;
+    for(let i=0;i<w.length;i++){if(g[i]!==w[i]){bad=i;break;}}
+    if(bad<0&&g.length===w.length)return {ok:true,vals:g,out:got.out};
+    const c=(q.cases&&q.cases[bad])||[];
+    const call='f('+c.map(x=>JSON.stringify(x)).join(', ')+')';
+    return {ok:false,msg:'For <code>'+escapeText(call)+'</code> your code gave <code>'+escapeText(String(g[bad]))+'</code>, but it should give <code>'+escapeText(String(w[bad]))+'</code>.',out:got.out};
+  }
+  return got.val===want.val?{ok:true,val:got.val,out:got.out}:{ok:false,msg:'Not the expected value — your code produced <code>'+escapeText(String(got.val))+'</code>.',out:got.out};
+}
+function runPython(){
+  const q=view==='q'?CURQ:null;
+  const code=taEl.value;
+  const resBox=document.getElementById('result');
+  if(!code.trim()){resBox.innerHTML='';banner('warn','✏️','Write some code first, then hit Run.');return;}
+  if(view==='sandbox'){
+    const r=runOne(code,{kind:'print'});
+    resBox.innerHTML='';
+    if(!r.ok){banner('err','⚠️','<b>Python error:</b> '+escapeText(r.err||'error'));if(r.out)resBox.appendChild(pyOut(r.out));}
+    else{banner('ok','✓','Ran.');resBox.appendChild(pyOut((r.out&&r.out.replace(/\n+$/,''))||'(no output — use print() to see values)'));}
+    return;
+  }
+  T.attempts++;
+  const chk=checkPython(q,code);
+  resBox.innerHTML='';
+  if(chk.error!==undefined){
+    T.errors++;
+    banner('err','⚠️','<b>Python error:</b> '+escapeText(chk.error));
+    if(chk.out)resBox.appendChild(pyOut(chk.out));
+    if(T.errors>=2){document.getElementById('reveal-btn').style.display='inline-block';if(hintsShown===0)showNextHint(true);}
+    return;
+  }
+  if(chk.ok){ complete(q, pyResultNode(chk)); }
+  else{
+    banner('err','✗','<b>Not quite.</b> '+chk.msg);
+    if(chk.out)resBox.appendChild(pyOut(chk.out));
+    if(T.attempts>=2||T.errors>=2)document.getElementById('reveal-btn').style.display='inline-block';
+    if(T.attempts>=2&&hintsShown===0)showToast('💡 Tip: tap <b>Hint</b> for a nudge — one clue at a time.',null,4000);
+  }
+}
+async function __pyBankTest(){
+  await ensurePyodide();
+  const bad=[],per={};
+  for(const q of (TRACKS.python?TRACKS.python.questions:[])){
+    per[q.concept]=(per[q.concept]||0)+1;
+    if(q.requires&&!q.requires.test(q.solution)){bad.push({id:q.id,err:'requires fails own solution'});continue;}
+    const r=runOne(q.solution,q);
+    if(!r.ok){bad.push({id:q.id,err:r.err});continue;}
+    if(q.kind==='func'&&(!r.vals||!r.vals.length))bad.push({id:q.id,err:'no func results'});
+    if(q.kind==='expr'&&r.val===undefined)bad.push({id:q.id,err:'expr no value'});
+  }
+  return {total:(TRACKS.python?TRACKS.python.questions.length:0),bad,per};
+}
+window.__pyBankTest=__pyBankTest;
+const PY_KEYWORDS=['def','return','if','elif','else','for','while','in','not','and','or','is','None','True','False','import','from','as','class','lambda','with','try','except','finally','raise','pass','break','continue','global','nonlocal','yield','assert','del'];
+const PY_BUILTINS=['print','len','range','sum','max','min','sorted','int','str','float','bool','list','dict','set','tuple','abs','round','zip','enumerate','map','filter','reversed','type'];
+const PY_HL_RE=new RegExp("(#[^\\n]*)|('[^']*'|\"[^\"]*\")|(\\b\\d+(?:\\.\\d+)?\\b)|\\b("+PY_KEYWORDS.join('|')+")\\b|\\b("+PY_BUILTINS.join('|')+")\\b",'g');
+function pyHighlight(escaped){return escaped.replace(PY_HL_RE,(m,c,s,n,kw,bi)=>{if(c)return '<span class="t-com">'+c+'</span>';if(s)return '<span class="t-str">'+s+'</span>';if(n)return '<span class="t-num">'+n+'</span>';if(kw)return '<span class="t-kw">'+m+'</span>';if(bi)return '<span class="t-fn">'+m+'</span>';return m;});}
 
 /* ---------------- Running & checking ---------------- */
 /* Plain-English diagnosis of what's actually wrong with the user's SQL,
@@ -1509,6 +2107,7 @@ function diagnose(sql,errMsg,q){
   return null;
 }
 function runQuery(){
+  if(state.track==='python')return runPython();
   const q=view==='q'?CURQ:null;
   const sql=taEl.value.trim();
   const resBox=document.getElementById('result');
@@ -1533,7 +2132,7 @@ function runQuery(){
   T.attempts++;
   const check=checkAnswer(q,result);
   if(check.ok){
-    complete(q,result);
+    complete(q, result?renderTable(result,true):null);
   }else{
     const dg=diagnose(sql,null,q);
     banner('err','✗',`<b>Not quite.</b> ${check.msg}${dg?`<br><span class="diag">💡 ${dg}</span>`:''}`);
@@ -1542,7 +2141,7 @@ function runQuery(){
     if(T.attempts>=2&&hintsShown===0)showToast('💡 Tip: tap <b>Hint</b> for a nudge — one clue at a time.',null,4000);
   }
 }
-function complete(q,result){
+function complete(q,outputNode){
   const resBox=document.getElementById('result');
   const firstSolve=!state.solved[q.id];
   const quality=qualityOf(T);
@@ -1561,7 +2160,7 @@ function complete(q,result){
   strip.className='auto-next';
   strip.innerHTML=`<span>Next question</span><div class="auto-track"><i></i></div><button class="btn tiny" id="next-now">Now ▸</button><button class="btn ghost tiny" id="next-stay">✕ stay</button>`;
   resBox.appendChild(strip);
-  if(result)resBox.appendChild(renderTable(result,true));
+  if(outputNode)resBox.appendChild(outputNode);
   document.getElementById('reveal-btn').style.display='none';
   const hb=document.getElementById('hint-btn');if(hb)hb.style.display='none';
   document.getElementById('next-now').onclick=()=>openNext();
@@ -1572,11 +2171,11 @@ function complete(q,result){
   after.forEach(c=>showToast('🔓 <b>New skill unlocked:</b> '+CONCEPT_META[c].label+' — it\'s now in the sidebar.',null,5000));
   if(firstSolve&&state.totalSolved>0&&state.totalSolved%5===0){
     const w=weakestSkill();
-    if(w)showToast('📊 '+state.totalSolved+'/200 solved. Weakest skill right now: <b>'+CONCEPT_META[w].label+'</b> — I\'ll mix more of it in.',null,5000);
+    if(w)showToast('📊 '+state.totalSolved+'/'+QUESTIONS.length+' solved. Weakest skill right now: <b>'+CONCEPT_META[w].label+'</b> — I\'ll mix more of it in.',null,5000);
   }
   if(state.totalSolved>=QUESTIONS.length&&!state.finished){
     state.finished=true;save();
-    showToast('🏆 <b>ALL 200 SOLVED.</b> Genuinely impressive. I\'ll keep serving repeats to keep you sharp — or go play in the Sandbox.',null,12000);
+    showToast('🏆 <b>All '+QUESTIONS.length+' '+TRACKS[state.track].label+' questions solved.</b> Genuinely impressive. I\'ll keep serving repeats to keep you sharp — or try the other track.',null,12000);
     celebrate();setTimeout(celebrate,600);
   }
 }
@@ -1693,7 +2292,7 @@ function wireEditor(initial){
   analyzeSql();
   taEl.focus({preventScroll:true});
 }
-function paint(){hlEl.innerHTML=highlight(escapeHtml(taEl.value))+'\n';}
+function paint(){hlEl.innerHTML=(state.track==='python'?pyHighlight:highlight)(escapeHtml(taEl.value))+'\n';}
 function insertAtCursor(text){
   const s=taEl.selectionStart,e=taEl.selectionEnd;
   taEl.value=taEl.value.slice(0,s)+text+taEl.value.slice(e);
@@ -1895,26 +2494,26 @@ function selectJoin(jt){
 function openSandbox(){
   clearTimeout(autoTimer);autoTimer=null;
   view='sandbox';renderSkills();
+  const isPy=state.track==='python';
   const m=document.getElementById('main');
   m.innerHTML=`
     <div class="card pad lesson-head">
       <div class="crumbs">Free play</div>
       <h1>Sandbox</h1>
-      <p class="blurb">No goals, no checking — just you and the database. Write any SQL against <code>customers</code> and <code>orders</code>.</p>
-      <div class="section-label">The tables</div>
-      <div class="schema" id="schema"></div>
-      <div class="section-label">Your query</div>
+      <p class="blurb">No goals, no checking — just you and ${isPy?'real Python':'the database'}. ${isPy?'Write any Python and run it; use <code>print()</code> to see values.':'Write any SQL against <code>customers</code> and <code>orders</code>.'}</p>
+      ${isPy?'':'<div class="section-label">The tables</div><div class="schema" id="schema"></div>'}
+      <div class="section-label">${isPy?'Your code':'Your query'}</div>
       <div class="editor-wrap">
         <div class="editor" id="editor">
           <pre aria-hidden="true"><code id="hl"></code></pre>
           <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
         </div>
-        <div class="run-row"><button class="btn run" id="run-btn">Run query ▸</button><span class="kbd">⌘/Ctrl + Enter</span></div>
+        <div class="run-row"><button class="btn run" id="run-btn">${isPy?'Run code ▸':'Run query ▸'}</button><span class="kbd">⌘/Ctrl + Enter</span></div>
       </div>
       <div class="result" id="result"></div>
     </div>`;
-  renderSchema();
-  wireEditor('SELECT customers.name, customers.city, orders.product, orders.amount\nFROM customers\nLEFT JOIN orders ON customers.id = orders.customer_id\nORDER BY orders.amount DESC;');
+  if(!isPy)renderSchema();
+  wireEditor(isPy?'# Try anything! Use print() to see output.\nnums = [4, 8, 15, 16, 23, 42]\nprint(sum(nums))\nprint([n for n in nums if n > 15])':'SELECT customers.name, customers.city, orders.product, orders.amount\nFROM customers\nLEFT JOIN orders ON customers.id = orders.customer_id\nORDER BY orders.amount DESC;');
 }
 
 /* ---------------- UI helpers ---------------- */

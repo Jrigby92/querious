@@ -1,15 +1,33 @@
-# Querious — learn SQL by doing
+# Querious — learn SQL & Python by doing
 
-A self-contained, adaptive SQL trainer with a live database. Every query you
-write actually runs against a real SQLite engine (WebAssembly) in your browser —
-real results, real error messages, no server.
+A self-contained, adaptive coding trainer with **two tracks** you switch between
+from the top of the page:
+
+- **SQL** — every query runs against a real SQLite engine (WebAssembly).
+- **Python** — every snippet runs in **real Python** (Pyodide / CPython-on-WASM).
+
+Real results, real error messages, no server. Each track keeps its own progress.
 
 ## How to open it
 
-**Double-click `index.html`.** First launch needs internet for a few seconds
-(to fetch the SQLite engine); after that everything runs locally.
+**Double-click `index.html`.** The SQL track needs internet for a few seconds on
+first launch (to fetch the SQLite engine). The Python track lazy-loads its
+runtime (~10 MB) the first time you click the **Python** tab — then it's instant.
 
-## What's inside
+## Tracks
+
+Use the **SQL / Python** toggle at the top to switch. Progress, mastery and which
+walkthroughs you've seen are tracked separately per track.
+
+### Python track — 200 questions across 14 skills
+Printing → variables → arithmetic → strings → booleans → if/else → lists →
+loops → dicts → **functions** → string methods → list comprehensions →
+tuples & sets → dict comprehensions. You write expressions, set variables, or
+define functions; your answer is checked by actually running it and comparing
+to a reference solution (so any correct approach passes — e.g. a loop or a
+comprehension both count).
+
+## What's inside (SQL track)
 
 - **400 practice questions** across **27 skills**, in two stages:
   - **Stage 1 — foundations (14 skills, 200 Qs):** SELECT → picking columns →
