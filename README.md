@@ -11,9 +11,16 @@ real results, real error messages, no server.
 
 ## What's inside
 
-- **200 practice questions** across **14 skills**: SELECT → picking columns →
-  WHERE → AND/OR → sorting → LIMIT → DISTINCT → aggregates → GROUP BY → HAVING
-  → INNER/LEFT/FULL JOIN → JOIN+GROUP BY.
+- **400 practice questions** across **27 skills**, in two stages:
+  - **Stage 1 — foundations (14 skills, 200 Qs):** SELECT → picking columns →
+    WHERE → AND/OR → sorting → LIMIT → DISTINCT → aggregates → GROUP BY → HAVING
+    → INNER/LEFT/FULL JOIN → JOIN+GROUP BY.
+  - **Stage 2 — advanced, dbt-style (13 skills, 200 Qs):** CASE → NULL handling
+    (COALESCE) → subqueries → **CTEs (WITH)** → conditional aggregation / pivots
+    → window functions → ranking → LAG/LEAD → the **dedup pattern** → set ops →
+    dates (strftime) → NTILE & frames → a multi-CTE **"build a dbt model"**
+    capstone. Mastery-gated behind Stage 1; all of it runs live (the dbt-model
+    walkthrough notes where real dbt would add Jinja / `ref()`).
 - **A learner model that picks your next question.** Each skill has a mastery
   score (0–100%) updated by how you solve: first-try clean wins push it up
   fast; hints, errors and reveals slow it down. Auto practice serves your
@@ -50,9 +57,12 @@ Two tables, deliberately shaped so joins matter:
 
 - `customers` (12 rows: id, name, city, age) — 5 cities; **Margaret, Tim and
   Barbara have no orders**.
-- `orders` (24 rows: id, customer_id, product, amount) — 10 products; **two
-  orphan orders** (#107 Headphones, #121 Desk Lamp) have `customer_id = NULL`.
+- `orders` (24 rows: id, customer_id, product, amount, **order_date, status**) —
+  10 products; **two orphan orders** (#107 Headphones, #121 Desk Lamp) have
+  `customer_id = NULL`. Dates span Jan–Jun 2024 (all distinct, for time-series
+  and dedup); `status` is mostly `completed` with some `returned` and a few
+  `NULL` (for the COALESCE lessons).
 
 So: INNER JOIN → 22 rows, LEFT JOIN → 25 (quiet customers appear), FULL JOIN →
-27 (orphans too). All amounts, ages and names are unique, so sorting questions
-always have one right order.
+27 (orphans too). All amounts, ages, names and dates are unique, so sorting and
+"latest record" questions always have one right answer.
