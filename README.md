@@ -1,10 +1,12 @@
 # Querious — learn SQL & Python by doing
 
-A self-contained, adaptive coding trainer with **two tracks** you switch between
-from the top of the page:
+A self-contained, adaptive coding trainer with **three tracks** you switch
+between from the top of the page:
 
 - **SQL** — every query runs against a real SQLite engine (WebAssembly).
 - **Python** — every snippet runs in **real Python** (Pyodide / CPython-on-WASM).
+- **pandas** — every expression runs in **real pandas**, against DataFrame
+  versions of the same `customers` / `orders` tables.
 
 Real results, real error messages, no server. Each track keeps its own progress.
 
@@ -26,6 +28,15 @@ tuples & sets → dict comprehensions. You write expressions, set variables, or
 define functions; your answer is checked by actually running it and comparing
 to a reference solution (so any correct approach passes — e.g. a loop or a
 comprehension both count).
+
+### pandas track — 150 questions across 12 skills
+Inspecting → selecting columns → filtering → sorting → aggregating →
+**(Intermediate)** group by → new values → counting & unique → string methods →
+merging → top-N → missing data. You write a pandas expression against the
+`customers` / `orders` DataFrames (with `df` aliased to `orders`); it's run for
+real and compared to a reference result (order-insensitive unless the task is
+about sorting). The pandas runtime (Python + the library, ~20 MB) loads the
+first time you open the pandas tab.
 
 ## What's inside (SQL track)
 

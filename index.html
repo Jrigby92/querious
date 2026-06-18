@@ -349,6 +349,7 @@
   <div class="trackswitch" id="trackswitch" role="tablist" aria-label="Choose a track">
     <button class="track-btn active" data-track="sql" role="tab">SQL</button>
     <button class="track-btn" data-track="python" role="tab">Python</button>
+    <button class="track-btn" data-track="pandas" role="tab">pandas</button>
   </div>
   <div class="spacer"></div>
   <div class="ability" title="Auto-detected from how you solve each step">
@@ -1571,6 +1572,284 @@ TRACKS.python={ key:'python', label:'Python', runtime:'python',
   tutorials:PY_TUTORIALS, questions:PY_QUESTIONS, byId:PY_BYID, byConcept:PY_BYCONCEPT,
   divider:{before:'functions',label:'Intermediate'} };
 
+/* ============================================================
+   PANDAS TRACK — 150 questions across 12 skills (real pandas via Pyodide)
+   Works against DataFrames `customers` (12 rows) and `orders` (22 rows, df = orders).
+   ============================================================ */
+function PDQ(id,concept,level,title,prompt,solution,opts){opts=opts||{};return{id,concept,level,title,prompt,solution,kind:'pandas',ordered:!!opts.ordered,requires:opts.req||null,reqMsg:opts.reqMsg||null,hints:opts.hints||[]};}
+const PD_CONCEPT_ORDER=['inspect','columns','filter','sort','aggregate','groupby','derive','counts','strings','merge','topn','nahandling'];
+const PD_META={
+  'inspect':  {label:'Inspecting',     blurb:"Get a feel for a DataFrame: <code>df.head()</code>, <code>df.shape</code>, <code>df.columns</code>, <code>len(df)</code>."},
+  'columns':  {label:'Selecting columns',blurb:"One column is <code>df['col']</code> (a Series); several is <code>df[['a','b']]</code> (a DataFrame)."},
+  'filter':   {label:'Filtering rows', blurb:"Keep rows with a boolean mask: <code>df[df['amount'] &gt; 100]</code>. Combine with <code>&amp;</code> (and) / <code>|</code> (or)."},
+  'sort':     {label:'Sorting',        blurb:"<code>df.sort_values('amount')</code> sorts; add <code>ascending=False</code> for high→low."},
+  'aggregate':{label:'Aggregating',    blurb:"Crunch a column to one number: <code>df['amount'].sum()</code> — also <code>mean / max / min / count / nunique</code>."},
+  'groupby':  {label:'Group by',       blurb:"<code>df.groupby('city')['amount'].sum().reset_index()</code> — aggregate within each group, then tidy into a DataFrame."},
+  'derive':   {label:'New values',     blurb:"Compute on a column to get a new Series: <code>df['amount'] * 1.2</code>, <code>df['amount'].cumsum()</code>."},
+  'counts':   {label:'Counting & unique',blurb:"<code>df['city'].value_counts()</code>, <code>df['city'].unique()</code>, <code>df['city'].nunique()</code>."},
+  'strings':  {label:'String methods', blurb:"Use <code>.str</code> on a text column: <code>df['name'].str.upper()</code>, <code>.str.contains('a')</code>, <code>.str.len()</code>."},
+  'merge':    {label:'Merging',        blurb:"Join two DataFrames: <code>pd.merge(customers, orders, left_on='id', right_on='customer_id')</code> — the pandas JOIN."},
+  'topn':     {label:'Top-N',          blurb:"<code>df.nlargest(3, 'amount')</code> / <code>df.nsmallest(3, 'amount')</code> — the biggest or smallest rows."},
+  'nahandling':{label:'Missing data',  blurb:"Handle NaN: <code>df.fillna(value)</code>, <code>df.dropna()</code>, <code>df['col'].isna()</code> / <code>.notna()</code>."}
+};
+const PD_PREREQ={
+  'inspect':[], 'columns':['inspect'], 'filter':['columns'], 'sort':['columns'], 'aggregate':['columns'],
+  'groupby':['aggregate','filter'], 'derive':['columns'], 'counts':['columns'], 'strings':['columns'],
+  'merge':['filter'], 'topn':['sort'], 'nahandling':['filter']
+};
+const PD_QUOTA={ 'inspect':8,'columns':12,'filter':18,'sort':12,'aggregate':16,'groupby':18,'derive':12,'counts':12,'strings':12,'merge':12,'topn':10,'nahandling':8 };
+const PD_TUTORIALS={
+  'inspect':[
+    {say:"In pandas, a table is a <b>DataFrame</b>. You have two: <code>customers</code> and <code>orders</code> (and <code>df</code> is a handy alias for <code>orders</code>). <code>.head()</code> peeks at the first few rows.", code:"orders.head()", new:".head()", run:true},
+    {say:"<code>.shape</code> is (rows, columns); <code>len(df)</code> is just the row count; <code>.columns</code> lists the column names.", code:"customers.shape", new:".shape", run:true},
+    {say:"Your turn."}
+  ],
+  'columns':[
+    {say:"Pick one column with <code>df['name']</code> — that gives a <b>Series</b> (a single column of values).", code:"customers['name']", new:"df['col']", run:true},
+    {say:"Pick several with a <b>list</b> of names inside the brackets — that gives a DataFrame.", code:"customers[['name', 'city']]", new:"df[['a', 'b']]", run:true},
+    {say:"Your turn."}
+  ],
+  'filter':[
+    {say:"A comparison on a column gives a True/False mask. Put that mask in the brackets to keep matching rows.", code:"orders[orders['amount'] > 100]", new:"df[df['col'] > value]", run:true},
+    {say:"Text comparisons use quotes. Combine conditions with <code>&amp;</code> (and) / <code>|</code> (or) — each condition in its own ( ).", code:"customers[(customers['city'] == 'London') & (customers['age'] > 30)]", new:"& and | (with parentheses)", run:true},
+    {say:"Your turn — keep the rows the task asks for."}
+  ],
+  'sort':[
+    {say:"<code>.sort_values('col')</code> sorts ascending.", code:"orders.sort_values('amount')", new:".sort_values('col')", run:true},
+    {say:"Add <code>ascending=False</code> for biggest-first.", code:"orders.sort_values('amount', ascending=False)", new:"ascending=False", run:true},
+    {say:"Your turn."}
+  ],
+  'aggregate':[
+    {say:"Take a column and crunch it to one number.", code:"orders['amount'].sum()", new:"df['col'].sum()", run:true},
+    {say:"Same family: <code>.mean()</code>, <code>.max()</code>, <code>.min()</code>, <code>.count()</code>, <code>.nunique()</code> (number of distinct values).", code:"orders['amount'].mean()", new:".mean() / .max() / .nunique()", run:true},
+    {say:"You can aggregate a filtered column too: <code>orders[orders['amount'] > 100]['amount'].sum()</code>. Your turn."}
+  ],
+  'groupby':[
+    {say:"<code>groupby</code> splits the rows into groups, then you aggregate a column within each group.", code:"orders.groupby('product')['amount'].sum()", new:"df.groupby('col')['x'].sum()", run:true},
+    {say:"Finish with <code>.reset_index()</code> to turn the result back into a tidy DataFrame (the group becomes a column).", code:"orders.groupby('product')['amount'].sum().reset_index()", new:".reset_index()", run:true},
+    {say:"Your turn — group, aggregate, and reset_index."}
+  ],
+  'derive':[
+    {say:"Maths on a whole column gives a new Series — applied to every row at once.", code:"orders['amount'] * 2", new:"df['col'] * 2", run:true},
+    {say:"Methods like <code>.cumsum()</code> build a running total.", code:"orders['amount'].cumsum()", new:".cumsum()", run:true},
+    {say:"Your turn."}
+  ],
+  'counts':[
+    {say:"<code>.value_counts()</code> tallies how often each value appears; <code>.reset_index()</code> tidies it into a DataFrame.", code:"customers['city'].value_counts().reset_index()", new:".value_counts()", run:true},
+    {say:"<code>.unique()</code> lists the distinct values; <code>.nunique()</code> counts them.", code:"customers['city'].nunique()", new:".unique() / .nunique()", run:true},
+    {say:"Your turn."}
+  ],
+  'strings':[
+    {say:"Use <code>.str</code> to run string methods down a text column.", code:"customers['name'].str.upper()", new:".str.upper()", run:true},
+    {say:"<code>.str.contains('a')</code> gives a True/False mask you can filter with.", code:"customers[customers['name'].str.contains('a')]", new:".str.contains(...)", run:true},
+    {say:"Your turn."}
+  ],
+  'merge':[
+    {say:"<code>pd.merge</code> joins two DataFrames on matching keys — here each order's <code>customer_id</code> meets a customer's <code>id</code>.", code:"pd.merge(customers, orders, left_on='id', right_on='customer_id').head()", new:"pd.merge(a, b, left_on=..., right_on=...)", run:true},
+    {say:"Then select the columns you want. (<code>how='left'</code> keeps every customer, even those with no orders.)", code:"pd.merge(customers, orders, left_on='id', right_on='customer_id')[['name', 'product']].head()", new:"merge then [[...]]", run:true},
+    {say:"Your turn."}
+  ],
+  'topn':[
+    {say:"<code>.nlargest(n, 'col')</code> grabs the n biggest rows by a column — already sorted.", code:"orders.nlargest(3, 'amount')", new:".nlargest(n, 'col')", run:true},
+    {say:"<code>.nsmallest(n, 'col')</code> is the opposite.", code:"orders.nsmallest(3, 'amount')", new:".nsmallest(n, 'col')", run:true},
+    {say:"Your turn."}
+  ],
+  'nahandling':[
+    {say:"Some orders have a missing <code>status</code> (shown as NaN). <code>.fillna(value)</code> replaces the gaps.", code:"orders['status'].fillna('unknown')", new:".fillna(value)", run:true},
+    {say:"<code>.isna()</code> flags the missing rows; <code>.dropna()</code> removes them.", code:"orders[orders['status'].isna()]", new:".isna() / .dropna()", run:true},
+    {say:"Your turn."}
+  ]
+};
+const PD_FAMILIES={
+'inspect':()=>[
+  PDQ('i:shape','inspect',1,"Shape of orders","Write an expression for the <b>shape</b> of <code>orders</code> (rows, columns).","orders.shape",{req:/shape/,reqMsg:"<code>.shape</code>",hints:["Use .shape.","<code>orders.shape</code>"]}),
+  PDQ('i:lenord','inspect',1,"Count the orders","Write an expression for the number of rows in <code>orders</code>.","len(orders)",{req:/len/,reqMsg:"<code>len()</code>",hints:["Use len().","<code>len(orders)</code>"]}),
+  PDQ('i:cols','inspect',2,"Column names","Write an expression for the list of column names of <code>orders</code>.","list(orders.columns)",{req:/columns/,reqMsg:"<code>.columns</code>",hints:["Wrap .columns in list().","<code>list(orders.columns)</code>"]}),
+  PDQ('i:shapecust','inspect',1,"Shape of customers","Write an expression for the <b>shape</b> of <code>customers</code>.","customers.shape",{req:/shape/,reqMsg:"<code>.shape</code>",hints:["<code>customers.shape</code>",""]}),
+  PDQ('i:head3','inspect',2,"First three orders","Write an expression for the first <b>3</b> rows of <code>orders</code>.","orders.head(3)",{req:/head/,reqMsg:"<code>.head()</code>",ordered:true,hints:["Pass 3 to head().","<code>orders.head(3)</code>"]}),
+  PDQ('i:headcust','inspect',2,"First customers","Write an expression for the first 5 rows of <code>customers</code>.","customers.head()",{req:/head/,reqMsg:"<code>.head()</code>",ordered:true,hints:["head() defaults to 5.","<code>customers.head()</code>"]}),
+  PDQ('i:tail2','inspect',2,"Last two orders","Write an expression for the last <b>2</b> rows of <code>orders</code>.","orders.tail(2)",{req:/tail/,reqMsg:"<code>.tail()</code>",ordered:true,hints:["Use .tail(2).","<code>orders.tail(2)</code>"]}),
+  PDQ('i:lencust','inspect',1,"Count the customers","Write an expression for the number of rows in <code>customers</code>.","len(customers)",{req:/len/,reqMsg:"<code>len()</code>",hints:["<code>len(customers)</code>",""]})
+],
+'columns':()=>[
+  PDQ('c:name','columns',1,"The name column","Select just the <b>name</b> column from <code>customers</code>.","customers['name']",{req:/\[/,reqMsg:"column selection",hints:["<code>customers['name']</code>",""]}),
+  PDQ('c:city','columns',1,"The city column","Select just the <b>city</b> column from <code>customers</code>.","customers['city']",{req:/\[/,reqMsg:"column selection",hints:["<code>customers['city']</code>",""]}),
+  PDQ('c:amount','columns',1,"The amount column","Select just the <b>amount</b> column from <code>orders</code>.","orders['amount']",{req:/\[/,reqMsg:"column selection",hints:["<code>orders['amount']</code>",""]}),
+  PDQ('c:product','columns',1,"The product column","Select just the <b>product</b> column from <code>orders</code>.","orders['product']",{req:/\[/,reqMsg:"column selection",hints:["<code>orders['product']</code>",""]}),
+  PDQ('c:age','columns',1,"The age column","Select just the <b>age</b> column from <code>customers</code>.","customers['age']",{req:/\[/,reqMsg:"column selection",hints:["<code>customers['age']</code>",""]}),
+  PDQ('c:date','columns',1,"The order_date column","Select just the <b>order_date</b> column from <code>orders</code>.","orders['order_date']",{req:/\[/,reqMsg:"column selection",hints:["<code>orders['order_date']</code>",""]}),
+  PDQ('c:namecity','columns',2,"Name and city","Select the <b>name</b> and <b>city</b> columns of <code>customers</code> (in that order).","customers[['name', 'city']]",{req:/\[\[/,reqMsg:"a list of columns <code>[[ ]]</code>",hints:["Use a list inside the brackets.","<code>customers[['name', 'city']]</code>"]}),
+  PDQ('c:nameage','columns',2,"Name and age","Select the <b>name</b> and <b>age</b> columns of <code>customers</code>.","customers[['name', 'age']]",{req:/\[\[/,reqMsg:"a list of columns",hints:["<code>customers[['name', 'age']]</code>",""]}),
+  PDQ('c:prodamt','columns',2,"Product and amount","Select the <b>product</b> and <b>amount</b> columns of <code>orders</code>.","orders[['product', 'amount']]",{req:/\[\[/,reqMsg:"a list of columns",hints:["<code>orders[['product', 'amount']]</code>",""]}),
+  PDQ('c:idnamecity','columns',2,"Three columns","Select <b>id</b>, <b>name</b> and <b>city</b> of <code>customers</code>.","customers[['id', 'name', 'city']]",{req:/\[\[/,reqMsg:"a list of columns",hints:["Three names in the list.","<code>customers[['id', 'name', 'city']]</code>"]}),
+  PDQ('c:citythenname','columns',2,"City then name","Select <b>city</b> then <b>name</b> of <code>customers</code> (city first).","customers[['city', 'name']]",{req:/\[\[/,reqMsg:"a list of columns",hints:["Order matters in the list.","<code>customers[['city', 'name']]</code>"]}),
+  PDQ('c:custprodamt','columns',2,"Three from orders","Select <b>customer_id</b>, <b>product</b> and <b>amount</b> of <code>orders</code>.","orders[['customer_id', 'product', 'amount']]",{req:/\[\[/,reqMsg:"a list of columns",hints:["<code>orders[['customer_id', 'product', 'amount']]</code>",""]})
+],
+'filter':()=>[
+  PDQ('f:gt100','filter',2,"Big orders","Keep the rows of <code>orders</code> where <b>amount is over 100</b>.","orders[orders['amount'] > 100]",{req:/>/,reqMsg:"a comparison",hints:["Mask: orders['amount'] > 100.","<code>orders[orders['amount'] &gt; 100]</code>"]}),
+  PDQ('f:lt30','filter',2,"Small orders","Keep the rows of <code>orders</code> where <b>amount is under 30</b>.","orders[orders['amount'] < 30]",{req:/</,reqMsg:"a comparison",hints:["<code>orders[orders['amount'] &lt; 30]</code>",""]}),
+  PDQ('f:ge200','filter',2,"At least 200","Keep the rows of <code>orders</code> where <b>amount is 200 or more</b>.","orders[orders['amount'] >= 200]",{req:/>=/,reqMsg:"<code>&gt;=</code>",hints:["<code>orders[orders['amount'] &gt;= 200]</code>",""]}),
+  PDQ('f:london','filter',2,"Londoners","Keep the rows of <code>customers</code> in <b>London</b>.","customers[customers['city'] == 'London']",{req:/==/,reqMsg:"<code>==</code>",hints:["Text needs quotes.","<code>customers[customers['city'] == 'London']</code>"]}),
+  PDQ('f:tokyo','filter',2,"Tokyo customers","Keep the rows of <code>customers</code> in <b>Tokyo</b>.","customers[customers['city'] == 'Tokyo']",{req:/==/,reqMsg:"<code>==</code>",hints:["<code>customers[customers['city'] == 'Tokyo']</code>",""]}),
+  PDQ('f:over40','filter',2,"Over 40","Keep the rows of <code>customers</code> <b>older than 40</b>.","customers[customers['age'] > 40]",{req:/>/,reqMsg:"a comparison",hints:["<code>customers[customers['age'] &gt; 40]</code>",""]}),
+  PDQ('f:under30','filter',2,"Under 30","Keep the rows of <code>customers</code> <b>younger than 30</b>.","customers[customers['age'] < 30]",{req:/</,reqMsg:"a comparison",hints:["<code>customers[customers['age'] &lt; 30]</code>",""]}),
+  PDQ('f:laptop','filter',2,"Laptop orders","Keep the rows of <code>orders</code> where the product is <b>Laptop</b>.","orders[orders['product'] == 'Laptop']",{req:/==/,reqMsg:"<code>==</code>",hints:["<code>orders[orders['product'] == 'Laptop']</code>",""]}),
+  PDQ('f:keyboard','filter',2,"Keyboard orders","Keep the rows of <code>orders</code> where the product is <b>Keyboard</b>.","orders[orders['product'] == 'Keyboard']",{req:/==/,reqMsg:"<code>==</code>",hints:["<code>orders[orders['product'] == 'Keyboard']</code>",""]}),
+  PDQ('f:returned','filter',2,"Returned orders","Keep the rows of <code>orders</code> with status <b>returned</b>.","orders[orders['status'] == 'returned']",{req:/==/,reqMsg:"<code>==</code>",hints:["<code>orders[orders['status'] == 'returned']</code>",""]}),
+  PDQ('f:gt1000','filter',2,"Big-ticket","Keep the rows of <code>orders</code> where amount is <b>over 1000</b>.","orders[orders['amount'] > 1000]",{req:/>/,reqMsg:"a comparison",hints:["<code>orders[orders['amount'] &gt; 1000]</code>",""]}),
+  PDQ('f:notlondon','filter',2,"Not London","Keep the rows of <code>customers</code> <b>not</b> in London.","customers[customers['city'] != 'London']",{req:/!=/,reqMsg:"<code>!=</code>",hints:["Not-equal is !=.","<code>customers[customers['city'] != 'London']</code>"]}),
+  PDQ('f:band','filter',3,"In a price band","Keep the rows of <code>orders</code> where amount is <b>over 100 and under 500</b>.","orders[(orders['amount'] > 100) & (orders['amount'] < 500)]",{req:/&/,reqMsg:"<code>&amp;</code> (and)",hints:["Two masks joined by &, each in ( ).","<code>orders[(orders['amount'] &gt; 100) &amp; (orders['amount'] &lt; 500)]</code>"]}),
+  PDQ('f:londonold','filter',3,"London & over 30","Keep <code>customers</code> in <b>London who are over 30</b>.","customers[(customers['city'] == 'London') & (customers['age'] > 30)]",{req:/&/,reqMsg:"<code>&amp;</code> (and)",hints:["One condition per side of &.","<code>customers[(customers['city'] == 'London') &amp; (customers['age'] &gt; 30)]</code>"]}),
+  PDQ('f:lonortok','filter',3,"London or Tokyo","Keep <code>customers</code> in <b>London or Tokyo</b>.","customers[(customers['city'] == 'London') | (customers['city'] == 'Tokyo')]",{req:/\|/,reqMsg:"<code>|</code> (or)",hints:["Use | with each side in ( ).","<code>customers[(customers['city'] == 'London') | (customers['city'] == 'Tokyo')]</code>"]}),
+  PDQ('f:ge199','filter',2,"199 and up","Keep the rows of <code>orders</code> where amount is <b>199 or more</b>.","orders[orders['amount'] >= 199]",{req:/>=/,reqMsg:"<code>&gt;=</code>",hints:["<code>orders[orders['amount'] &gt;= 199]</code>",""]}),
+  PDQ('f:senior','filter',2,"50 and over","Keep the rows of <code>customers</code> aged <b>50 or more</b>.","customers[customers['age'] >= 50]",{req:/>=/,reqMsg:"<code>&gt;=</code>",hints:["<code>customers[customers['age'] &gt;= 50]</code>",""]}),
+  PDQ('f:laptopbig','filter',3,"Pricey laptops","Keep <code>orders</code> that are a <b>Laptop and over 1200</b>.","orders[(orders['product'] == 'Laptop') & (orders['amount'] > 1200)]",{req:/&/,reqMsg:"<code>&amp;</code> (and)",hints:["Text test AND number test.","<code>orders[(orders['product'] == 'Laptop') &amp; (orders['amount'] &gt; 1200)]</code>"]})
+],
+'sort':()=>[
+  PDQ('s:amtasc','sort',2,"Cheapest first","Sort <code>orders</code> by <b>amount</b>, lowest first.","orders.sort_values('amount')",{req:/sort_values/,reqMsg:"<code>.sort_values()</code>",ordered:true,hints:["<code>orders.sort_values('amount')</code>",""]}),
+  PDQ('s:amtdesc','sort',2,"Most expensive first","Sort <code>orders</code> by <b>amount</b>, highest first.","orders.sort_values('amount', ascending=False)",{req:/ascending/,reqMsg:"<code>ascending=False</code>",ordered:true,hints:["Add ascending=False.","<code>orders.sort_values('amount', ascending=False)</code>"]}),
+  PDQ('s:ageasc','sort',2,"Youngest first","Sort <code>customers</code> by <b>age</b>, youngest first.","customers.sort_values('age')",{req:/sort_values/,reqMsg:"<code>.sort_values()</code>",ordered:true,hints:["<code>customers.sort_values('age')</code>",""]}),
+  PDQ('s:agedesc','sort',2,"Oldest first","Sort <code>customers</code> by <b>age</b>, oldest first.","customers.sort_values('age', ascending=False)",{req:/ascending/,reqMsg:"<code>ascending=False</code>",ordered:true,hints:["<code>customers.sort_values('age', ascending=False)</code>",""]}),
+  PDQ('s:nameasc','sort',2,"A to Z","Sort <code>customers</code> by <b>name</b> alphabetically.","customers.sort_values('name')",{req:/sort_values/,reqMsg:"<code>.sort_values()</code>",ordered:true,hints:["<code>customers.sort_values('name')</code>",""]}),
+  PDQ('s:namedesc','sort',2,"Z to A","Sort <code>customers</code> by <b>name</b> reverse-alphabetically.","customers.sort_values('name', ascending=False)",{req:/ascending/,reqMsg:"<code>ascending=False</code>",ordered:true,hints:["<code>customers.sort_values('name', ascending=False)</code>",""]}),
+  PDQ('s:dateasc','sort',2,"Oldest orders","Sort <code>orders</code> by <b>order_date</b>, earliest first.","orders.sort_values('order_date')",{req:/sort_values/,reqMsg:"<code>.sort_values()</code>",ordered:true,hints:["<code>orders.sort_values('order_date')</code>",""]}),
+  PDQ('s:datedesc','sort',2,"Newest orders","Sort <code>orders</code> by <b>order_date</b>, latest first.","orders.sort_values('order_date', ascending=False)",{req:/ascending/,reqMsg:"<code>ascending=False</code>",ordered:true,hints:["<code>orders.sort_values('order_date', ascending=False)</code>",""]}),
+  PDQ('s:prodasc','sort',2,"By product","Sort <code>orders</code> by <b>product</b> alphabetically.","orders.sort_values('product')",{req:/sort_values/,reqMsg:"<code>.sort_values()</code>",ordered:true,hints:["<code>orders.sort_values('product')</code>",""]}),
+  PDQ('s:cityasc','sort',2,"By city","Sort <code>customers</code> by <b>city</b> alphabetically.","customers.sort_values('city')",{req:/sort_values/,reqMsg:"<code>.sort_values()</code>",ordered:true,hints:["<code>customers.sort_values('city')</code>",""]}),
+  PDQ('s:custid','sort',2,"By customer_id","Sort <code>orders</code> by <b>customer_id</b>, lowest first.","orders.sort_values('customer_id')",{req:/sort_values/,reqMsg:"<code>.sort_values()</code>",ordered:true,hints:["<code>orders.sort_values('customer_id')</code>",""]}),
+  PDQ('s:iddesc','sort',2,"Customers by id desc","Sort <code>customers</code> by <b>id</b>, highest first.","customers.sort_values('id', ascending=False)",{req:/ascending/,reqMsg:"<code>ascending=False</code>",ordered:true,hints:["<code>customers.sort_values('id', ascending=False)</code>",""]})
+],
+'aggregate':()=>[
+  PDQ('a:sum','aggregate',1,"Total revenue","Write an expression for the <b>sum</b> of the <code>amount</code> column in <code>orders</code>.","orders['amount'].sum()",{req:/sum/,reqMsg:"<code>.sum()</code>",hints:["<code>orders['amount'].sum()</code>",""]}),
+  PDQ('a:mean','aggregate',1,"Average order","Write an expression for the <b>mean</b> of <code>orders['amount']</code>.","orders['amount'].mean()",{req:/mean/,reqMsg:"<code>.mean()</code>",hints:["<code>orders['amount'].mean()</code>",""]}),
+  PDQ('a:max','aggregate',1,"Biggest order","Write an expression for the <b>max</b> of <code>orders['amount']</code>.","orders['amount'].max()",{req:/max/,reqMsg:"<code>.max()</code>",hints:["<code>orders['amount'].max()</code>",""]}),
+  PDQ('a:min','aggregate',1,"Smallest order","Write an expression for the <b>min</b> of <code>orders['amount']</code>.","orders['amount'].min()",{req:/min/,reqMsg:"<code>.min()</code>",hints:["<code>orders['amount'].min()</code>",""]}),
+  PDQ('a:count','aggregate',1,"How many amounts","Write an expression for the <b>count</b> of <code>orders['amount']</code>.","orders['amount'].count()",{req:/count/,reqMsg:"<code>.count()</code>",hints:["<code>orders['amount'].count()</code>",""]}),
+  PDQ('a:meanage','aggregate',1,"Average age","Write an expression for the <b>mean</b> of <code>customers['age']</code>.","customers['age'].mean()",{req:/mean/,reqMsg:"<code>.mean()</code>",hints:["<code>customers['age'].mean()</code>",""]}),
+  PDQ('a:maxage','aggregate',1,"Oldest age","Write an expression for the <b>max</b> of <code>customers['age']</code>.","customers['age'].max()",{req:/max/,reqMsg:"<code>.max()</code>",hints:["<code>customers['age'].max()</code>",""]}),
+  PDQ('a:minage','aggregate',1,"Youngest age","Write an expression for the <b>min</b> of <code>customers['age']</code>.","customers['age'].min()",{req:/min/,reqMsg:"<code>.min()</code>",hints:["<code>customers['age'].min()</code>",""]}),
+  PDQ('a:sumlaptop','aggregate',3,"Laptop revenue","Write an expression for the total <code>amount</code> of <b>Laptop</b> orders.","orders[orders['product'] == 'Laptop']['amount'].sum()",{req:/sum/,reqMsg:"<code>.sum()</code>",hints:["Filter to Laptops, then .sum().","<code>orders[orders['product'] == 'Laptop']['amount'].sum()</code>"]}),
+  PDQ('a:nunicity','aggregate',2,"Distinct cities","Write an expression for the number of <b>distinct cities</b> in <code>customers</code>.","customers['city'].nunique()",{req:/nunique/,reqMsg:"<code>.nunique()</code>",hints:["<code>customers['city'].nunique()</code>",""]}),
+  PDQ('a:nuniprod','aggregate',2,"Distinct products","Write an expression for the number of <b>distinct products</b> in <code>orders</code>.","orders['product'].nunique()",{req:/nunique/,reqMsg:"<code>.nunique()</code>",hints:["<code>orders['product'].nunique()</code>",""]}),
+  PDQ('a:sumage','aggregate',1,"Total age","Write an expression for the <b>sum</b> of <code>customers['age']</code>.","customers['age'].sum()",{req:/sum/,reqMsg:"<code>.sum()</code>",hints:["<code>customers['age'].sum()</code>",""]}),
+  PDQ('a:meanbig','aggregate',3,"Average big order","Write an expression for the <b>mean</b> amount of orders <b>over 100</b>.","orders[orders['amount'] > 100]['amount'].mean()",{req:/mean/,reqMsg:"<code>.mean()</code>",hints:["Filter then .mean().","<code>orders[orders['amount'] &gt; 100]['amount'].mean()</code>"]}),
+  PDQ('a:sumreturned','aggregate',3,"Returned value","Write an expression for the total <code>amount</code> of <b>returned</b> orders.","orders[orders['status'] == 'returned']['amount'].sum()",{req:/sum/,reqMsg:"<code>.sum()</code>",hints:["Filter to returned, then .sum().","<code>orders[orders['status'] == 'returned']['amount'].sum()</code>"]}),
+  PDQ('a:roundmean','aggregate',3,"Average, rounded","Write an expression for the mean of <code>orders['amount']</code> rounded to <b>2</b> decimals.","round(orders['amount'].mean(), 2)",{req:/mean/,reqMsg:"<code>.mean()</code>",hints:["Wrap mean in round(..., 2).","<code>round(orders['amount'].mean(), 2)</code>"]}),
+  PDQ('a:nunicust','aggregate',2,"Distinct buyers","Write an expression for the number of <b>distinct customer_id</b> values in <code>orders</code>.","orders['customer_id'].nunique()",{req:/nunique/,reqMsg:"<code>.nunique()</code>",hints:["<code>orders['customer_id'].nunique()</code>",""]})
+],
+'groupby':()=>[
+  PDQ('g:custsum','groupby',3,"Spend per customer","For each <b>customer_id</b>, the total <code>amount</code> — as a DataFrame.","orders.groupby('customer_id')['amount'].sum().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["groupby, sum, reset_index.","<code>orders.groupby('customer_id')['amount'].sum().reset_index()</code>"]}),
+  PDQ('g:custmean','groupby',3,"Average per customer","For each <b>customer_id</b>, the mean <code>amount</code> — as a DataFrame.","orders.groupby('customer_id')['amount'].mean().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...['amount'].mean().reset_index()",""]}),
+  PDQ('g:custmax','groupby',3,"Biggest per customer","For each <b>customer_id</b>, the max <code>amount</code> — as a DataFrame.","orders.groupby('customer_id')['amount'].max().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...['amount'].max().reset_index()",""]}),
+  PDQ('g:custcount','groupby',3,"Orders per customer","For each <b>customer_id</b>, the count of <code>amount</code> — as a DataFrame.","orders.groupby('customer_id')['amount'].count().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...['amount'].count().reset_index()",""]}),
+  PDQ('g:prodsum','groupby',3,"Sales per product","For each <b>product</b>, the total <code>amount</code> — as a DataFrame.","orders.groupby('product')['amount'].sum().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["groupby('product')...sum().reset_index()",""]}),
+  PDQ('g:prodmean','groupby',3,"Average price per product","For each <b>product</b>, the mean <code>amount</code> — as a DataFrame.","orders.groupby('product')['amount'].mean().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...mean().reset_index()",""]}),
+  PDQ('g:prodcount','groupby',3,"Times each product sold","For each <b>product</b>, the count of <code>amount</code> — as a DataFrame.","orders.groupby('product')['amount'].count().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...count().reset_index()",""]}),
+  PDQ('g:prodmax','groupby',3,"Top price per product","For each <b>product</b>, the max <code>amount</code> — as a DataFrame.","orders.groupby('product')['amount'].max().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...max().reset_index()",""]}),
+  PDQ('g:prodsize','groupby',4,"Rows per product (size)","For each <b>product</b>, the number of rows — use <code>.size()</code> and name the column <code>n</code>.","orders.groupby('product').size().reset_index(name='n')",{req:/size/,reqMsg:"<code>.size()</code>",hints:["groupby('product').size().reset_index(name='n')",""]}),
+  PDQ('g:custsize','groupby',4,"Rows per customer (size)","For each <b>customer_id</b>, the number of rows — use <code>.size()</code> named <code>n</code>.","orders.groupby('customer_id').size().reset_index(name='n')",{req:/size/,reqMsg:"<code>.size()</code>",hints:["groupby('customer_id').size().reset_index(name='n')",""]}),
+  PDQ('g:cityagemean','groupby',3,"Average age per city","For each <b>city</b>, the mean <code>age</code> of customers — as a DataFrame.","customers.groupby('city')['age'].mean().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["customers.groupby('city')['age'].mean().reset_index()",""]}),
+  PDQ('g:cityagemax','groupby',3,"Oldest per city","For each <b>city</b>, the max <code>age</code> — as a DataFrame.","customers.groupby('city')['age'].max().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...['age'].max().reset_index()",""]}),
+  PDQ('g:citysize','groupby',4,"Customers per city","For each <b>city</b>, how many customers — use <code>.size()</code> named <code>n</code>.","customers.groupby('city').size().reset_index(name='n')",{req:/size/,reqMsg:"<code>.size()</code>",hints:["customers.groupby('city').size().reset_index(name='n')",""]}),
+  PDQ('g:cityagemin','groupby',3,"Youngest per city","For each <b>city</b>, the min <code>age</code> — as a DataFrame.","customers.groupby('city')['age'].min().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...['age'].min().reset_index()",""]}),
+  PDQ('g:statussum','groupby',3,"Value per status","For each <b>status</b>, the total <code>amount</code> — as a DataFrame.","orders.groupby('status')['amount'].sum().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["groupby('status')['amount'].sum().reset_index()",""]}),
+  PDQ('g:prodmin','groupby',3,"Cheapest per product","For each <b>product</b>, the min <code>amount</code> — as a DataFrame.","orders.groupby('product')['amount'].min().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...min().reset_index()",""]}),
+  PDQ('g:custmin','groupby',3,"Cheapest per customer","For each <b>customer_id</b>, the min <code>amount</code> — as a DataFrame.","orders.groupby('customer_id')['amount'].min().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["...min().reset_index()",""]}),
+  PDQ('g:citycount','groupby',3,"Count per city","For each <b>city</b>, the count of <code>id</code> — as a DataFrame.","customers.groupby('city')['id'].count().reset_index()",{req:/groupby/,reqMsg:"<code>.groupby()</code>",hints:["customers.groupby('city')['id'].count().reset_index()",""]})
+]
+};
+Object.assign(PD_FAMILIES,{
+'derive':()=>[
+  PDQ('d:x2','derive',2,"Double the amount","Write an expression that <b>doubles</b> the <code>amount</code> column of <code>orders</code>.","orders['amount'] * 2",{req:/\*/,reqMsg:"<code>*</code>",hints:["Multiply the column.","<code>orders['amount'] * 2</code>"]}),
+  PDQ('d:plus10','derive',2,"Add ten","Write an expression that adds <b>10</b> to <code>orders['amount']</code>.","orders['amount'] + 10",{req:/\+/,reqMsg:"<code>+</code>",hints:["<code>orders['amount'] + 10</code>",""]}),
+  PDQ('d:half','derive',2,"Halve it","Write an expression that <b>halves</b> <code>orders['amount']</code> (use /).","orders['amount'] / 2",{req:/\//,reqMsg:"<code>/</code>",hints:["<code>orders['amount'] / 2</code>",""]}),
+  PDQ('d:agem1','derive',2,"Age minus one","Write an expression for <code>customers['age']</code> <b>minus 1</b>.","customers['age'] - 1",{req:/-/,reqMsg:"<code>-</code>",hints:["<code>customers['age'] - 1</code>",""]}),
+  PDQ('d:tax','derive',2,"Add 20% tax","Write an expression for <code>orders['amount']</code> times <b>1.2</b>.","orders['amount'] * 1.2",{req:/\*/,reqMsg:"<code>*</code>",hints:["<code>orders['amount'] * 1.2</code>",""]}),
+  PDQ('d:agep10','derive',2,"Age plus ten","Write an expression for <code>customers['age']</code> <b>plus 10</b>.","customers['age'] + 10",{req:/\+/,reqMsg:"<code>+</code>",hints:["<code>customers['age'] + 10</code>",""]}),
+  PDQ('d:floor10','derive',3,"Tens digit","Write an expression for <code>orders['amount']</code> <b>// 10</b> (whole-number divide).","orders['amount'] // 10",{req:/\/\//,reqMsg:"<code>//</code>",hints:["<code>orders['amount'] // 10</code>",""]}),
+  PDQ('d:gt100','derive',2,"Over-100 flag","Write an expression giving a True/False column: is each <code>amount</code> over 100?","orders['amount'] > 100",{req:/>/,reqMsg:"a comparison",hints:["A comparison on the column gives booleans.","<code>orders['amount'] &gt; 100</code>"]}),
+  PDQ('d:mod10','derive',3,"Remainder mod 10","Write an expression for <code>orders['amount']</code> <b>% 10</b>.","orders['amount'] % 10",{req:/%/,reqMsg:"<code>%</code>",hints:["<code>orders['amount'] % 10</code>",""]}),
+  PDQ('d:months','derive',2,"Age in months","Write an expression for <code>customers['age']</code> times <b>12</b>.","customers['age'] * 12",{req:/\*/,reqMsg:"<code>*</code>",hints:["<code>customers['age'] * 12</code>",""]}),
+  PDQ('d:dev','derive',3,"Distance from mean","Write an expression: each <code>amount</code> <b>minus the mean</b> amount.","orders['amount'] - orders['amount'].mean()",{req:/mean/,reqMsg:"<code>.mean()</code>",hints:["Subtract the mean from the column.","<code>orders['amount'] - orders['amount'].mean()</code>"]}),
+  PDQ('d:cumsum','derive',3,"Running total","Write an expression for the <b>cumulative sum</b> of <code>orders['amount']</code>.","orders['amount'].cumsum()",{req:/cumsum/,reqMsg:"<code>.cumsum()</code>",ordered:true,hints:["<code>orders['amount'].cumsum()</code>",""]})
+],
+'counts':()=>[
+  PDQ('n:cityvc','counts',3,"Customers per city","Write an expression for the <b>value counts</b> of <code>customers['city']</code> as a DataFrame.","customers['city'].value_counts().reset_index()",{req:/value_counts/,reqMsg:"<code>.value_counts()</code>",hints:["value_counts then reset_index.","<code>customers['city'].value_counts().reset_index()</code>"]}),
+  PDQ('n:prodvc','counts',3,"Orders per product","Write an expression for the value counts of <code>orders['product']</code> as a DataFrame.","orders['product'].value_counts().reset_index()",{req:/value_counts/,reqMsg:"<code>.value_counts()</code>",hints:["<code>orders['product'].value_counts().reset_index()</code>",""]}),
+  PDQ('n:statusvc','counts',3,"Orders per status","Write an expression for the value counts of <code>orders['status']</code> as a DataFrame.","orders['status'].value_counts().reset_index()",{req:/value_counts/,reqMsg:"<code>.value_counts()</code>",hints:["<code>orders['status'].value_counts().reset_index()</code>",""]}),
+  PDQ('n:nucity','counts',2,"How many cities","Write an expression for the number of <b>distinct</b> cities in <code>customers</code>.","customers['city'].nunique()",{req:/nunique/,reqMsg:"<code>.nunique()</code>",hints:["<code>customers['city'].nunique()</code>",""]}),
+  PDQ('n:nuprod','counts',2,"How many products","Write an expression for the number of distinct products in <code>orders</code>.","orders['product'].nunique()",{req:/nunique/,reqMsg:"<code>.nunique()</code>",hints:["<code>orders['product'].nunique()</code>",""]}),
+  PDQ('n:ucity','counts',3,"Distinct cities, sorted","Write an expression for the <b>sorted list</b> of distinct cities (use .unique().tolist()).","sorted(customers['city'].unique().tolist())",{req:/unique/,reqMsg:"<code>.unique()</code>",hints:["sorted(...unique().tolist()).","<code>sorted(customers['city'].unique().tolist())</code>"]}),
+  PDQ('n:uprod','counts',3,"Distinct products, sorted","Write an expression for the sorted list of distinct products.","sorted(orders['product'].unique().tolist())",{req:/unique/,reqMsg:"<code>.unique()</code>",hints:["<code>sorted(orders['product'].unique().tolist())</code>",""]}),
+  PDQ('n:custvc','counts',3,"Orders per customer_id","Write an expression for the value counts of <code>orders['customer_id']</code> as a DataFrame.","orders['customer_id'].value_counts().reset_index()",{req:/value_counts/,reqMsg:"<code>.value_counts()</code>",hints:["<code>orders['customer_id'].value_counts().reset_index()</code>",""]}),
+  PDQ('n:lenucity','counts',2,"Number of cities (via unique)","Write an expression for how many distinct cities there are, using <code>.unique()</code> and <code>len</code>.","len(customers['city'].unique())",{req:/unique/,reqMsg:"<code>.unique()</code>",hints:["len(...unique()).","<code>len(customers['city'].unique())</code>"]}),
+  PDQ('n:nuage','counts',2,"Distinct ages","Write an expression for the number of distinct ages in <code>customers</code>.","customers['age'].nunique()",{req:/nunique/,reqMsg:"<code>.nunique()</code>",hints:["<code>customers['age'].nunique()</code>",""]}),
+  PDQ('n:ustatus','counts',3,"Distinct statuses, sorted","Write an expression for the sorted list of distinct non-missing statuses (use dropna().unique().tolist()).","sorted(orders['status'].dropna().unique().tolist())",{req:/unique/,reqMsg:"<code>.unique()</code>",hints:["Drop NaN first.","<code>sorted(orders['status'].dropna().unique().tolist())</code>"]}),
+  PDQ('n:nucust','counts',2,"How many buyers","Write an expression for the number of distinct <code>customer_id</code> values in <code>orders</code>.","orders['customer_id'].nunique()",{req:/nunique/,reqMsg:"<code>.nunique()</code>",hints:["<code>orders['customer_id'].nunique()</code>",""]})
+],
+'strings':()=>[
+  PDQ('t:upper','strings',2,"Uppercase names","Write an expression that uppercases <code>customers['name']</code>.","customers['name'].str.upper()",{req:/upper/,reqMsg:"<code>.str.upper()</code>",hints:["Use .str.upper().","<code>customers['name'].str.upper()</code>"]}),
+  PDQ('t:lower','strings',2,"Lowercase cities","Write an expression that lowercases <code>customers['city']</code>.","customers['city'].str.lower()",{req:/lower/,reqMsg:"<code>.str.lower()</code>",hints:["<code>customers['city'].str.lower()</code>",""]}),
+  PDQ('t:len','strings',2,"Name lengths","Write an expression for the <b>length</b> of each <code>customers['name']</code>.","customers['name'].str.len()",{req:/str\.len/,reqMsg:"<code>.str.len()</code>",hints:["<code>customers['name'].str.len()</code>",""]}),
+  PDQ('t:contains','strings',2,"Has an 'a'?","Write an expression: does each <code>customers['name']</code> contain <b>a</b>? (True/False column)","customers['name'].str.contains('a')",{req:/contains/,reqMsg:"<code>.str.contains()</code>",hints:["<code>customers['name'].str.contains('a')</code>",""]}),
+  PDQ('t:starts','strings',3,"Names starting A","Keep the <code>customers</code> rows whose <b>name starts with A</b>.","customers[customers['name'].str.startswith('A')]",{req:/startswith/,reqMsg:"<code>.str.startswith()</code>",hints:["Filter with a .str.startswith mask.","<code>customers[customers['name'].str.startswith('A')]</code>"]}),
+  PDQ('t:replace','strings',3,"Swap a for @","Write an expression that replaces <b>a</b> with <b>@</b> in <code>customers['name']</code>.","customers['name'].str.replace('a', '@')",{req:/replace/,reqMsg:"<code>.str.replace()</code>",hints:["<code>customers['name'].str.replace('a', '@')</code>",""]}),
+  PDQ('t:citycontains','strings',3,"Cities with 'o'","Keep the <code>customers</code> rows whose <b>city contains o</b>.","customers[customers['city'].str.contains('o')]",{req:/contains/,reqMsg:"<code>.str.contains()</code>",hints:["<code>customers[customers['city'].str.contains('o')]</code>",""]}),
+  PDQ('t:produpper','strings',2,"Uppercase products","Write an expression that uppercases <code>orders['product']</code>.","orders['product'].str.upper()",{req:/upper/,reqMsg:"<code>.str.upper()</code>",hints:["<code>orders['product'].str.upper()</code>",""]}),
+  PDQ('t:prodlen','strings',2,"Product lengths","Write an expression for the length of each <code>orders['product']</code>.","orders['product'].str.len()",{req:/str\.len/,reqMsg:"<code>.str.len()</code>",hints:["<code>orders['product'].str.len()</code>",""]}),
+  PDQ('t:ends','strings',3,"Names ending in a","Keep the <code>customers</code> rows whose <b>name ends with a</b>.","customers[customers['name'].str.endswith('a')]",{req:/endswith/,reqMsg:"<code>.str.endswith()</code>",hints:["<code>customers[customers['name'].str.endswith('a')]</code>",""]}),
+  PDQ('t:first','strings',3,"First letters","Write an expression for the <b>first letter</b> of each <code>customers['name']</code> (use .str[0]).","customers['name'].str[0]",{req:/str\[/,reqMsg:"<code>.str[ ]</code>",hints:["<code>customers['name'].str[0]</code>",""]}),
+  PDQ('t:cityupper','strings',2,"Uppercase cities","Write an expression that uppercases <code>customers['city']</code>.","customers['city'].str.upper()",{req:/upper/,reqMsg:"<code>.str.upper()</code>",hints:["<code>customers['city'].str.upper()</code>",""]})
+],
+'merge':()=>[
+  PDQ('m:full','merge',3,"Join the tables","Merge <code>customers</code> and <code>orders</code> on <code>id</code> = <code>customer_id</code> (an inner join).","pd.merge(customers, orders, left_on='id', right_on='customer_id')",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["pd.merge(customers, orders, left_on='id', right_on='customer_id')",""]}),
+  PDQ('m:np','merge',3,"Name and product","Merge the tables, then select <b>name</b> and <b>product</b>.","pd.merge(customers, orders, left_on='id', right_on='customer_id')[['name', 'product']]",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["Merge, then [['name', 'product']].","<code>pd.merge(...)[['name', 'product']]</code>"]}),
+  PDQ('m:na','merge',3,"Name and amount","Merge the tables, then select <b>name</b> and <b>amount</b>.","pd.merge(customers, orders, left_on='id', right_on='customer_id')[['name', 'amount']]",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["<code>pd.merge(...)[['name', 'amount']]</code>",""]}),
+  PDQ('m:cp','merge',3,"City and product","Merge the tables, then select <b>city</b> and <b>product</b>.","pd.merge(customers, orders, left_on='id', right_on='customer_id')[['city', 'product']]",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["<code>pd.merge(...)[['city', 'product']]</code>",""]}),
+  PDQ('m:left','merge',4,"Keep every customer","Do a <b>left</b> merge (how='left') and select <b>name</b> and <b>product</b> — quiet customers show NaN.","pd.merge(customers, orders, left_on='id', right_on='customer_id', how='left')[['name', 'product']]",{req:/how/,reqMsg:"<code>how='left'</code>",hints:["Add how='left'.","<code>pd.merge(customers, orders, left_on='id', right_on='customer_id', how='left')[['name', 'product']]</code>"]}),
+  PDQ('m:citysum','merge',4,"Revenue per city","Merge, then total <code>amount</code> per <b>city</b> as a DataFrame.","pd.merge(customers, orders, left_on='id', right_on='customer_id').groupby('city')['amount'].sum().reset_index()",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["Merge then groupby('city')['amount'].sum().reset_index().",""]}),
+  PDQ('m:prodcount','merge',4,"Orders per product (merged)","Merge, then count <code>amount</code> per <b>product</b> as a DataFrame.","pd.merge(customers, orders, left_on='id', right_on='customer_id').groupby('product')['amount'].count().reset_index()",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["Merge then groupby('product')['amount'].count().reset_index().",""]}),
+  PDQ('m:npa','merge',3,"Name, product, amount","Merge the tables, then select <b>name</b>, <b>product</b> and <b>amount</b>.","pd.merge(customers, orders, left_on='id', right_on='customer_id')[['name', 'product', 'amount']]",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["<code>pd.merge(...)[['name', 'product', 'amount']]</code>",""]}),
+  PDQ('m:leftna','merge',4,"Left join, name & amount","Left merge (how='left') and select <b>name</b> and <b>amount</b>.","pd.merge(customers, orders, left_on='id', right_on='customer_id', how='left')[['name', 'amount']]",{req:/how/,reqMsg:"<code>how='left'</code>",hints:["<code>pd.merge(..., how='left')[['name', 'amount']]</code>",""]}),
+  PDQ('m:citycount','merge',4,"Orders per city (merged)","Merge, then count <code>amount</code> per <b>city</b> as a DataFrame.","pd.merge(customers, orders, left_on='id', right_on='customer_id').groupby('city')['amount'].count().reset_index()",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["Merge then groupby('city')['amount'].count().reset_index().",""]}),
+  PDQ('m:ncp','merge',3,"Name, city, product","Merge the tables, then select <b>name</b>, <b>city</b> and <b>product</b>.","pd.merge(customers, orders, left_on='id', right_on='customer_id')[['name', 'city', 'product']]",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["<code>pd.merge(...)[['name', 'city', 'product']]</code>",""]}),
+  PDQ('m:len','merge',3,"How many matched rows","Write an expression for the number of rows in the inner merge of the two tables.","len(pd.merge(customers, orders, left_on='id', right_on='customer_id'))",{req:/merge/,reqMsg:"<code>pd.merge()</code>",hints:["Wrap the merge in len().","<code>len(pd.merge(customers, orders, left_on='id', right_on='customer_id'))</code>"]})
+],
+'topn':()=>[
+  PDQ('o:l3','topn',2,"Top 3 orders","Write an expression for the <b>3 largest</b> orders by <code>amount</code>.","orders.nlargest(3, 'amount')",{req:/nlargest/,reqMsg:"<code>.nlargest()</code>",ordered:true,hints:["<code>orders.nlargest(3, 'amount')</code>",""]}),
+  PDQ('o:l5','topn',2,"Top 5 orders","Write an expression for the <b>5 largest</b> orders by <code>amount</code>.","orders.nlargest(5, 'amount')",{req:/nlargest/,reqMsg:"<code>.nlargest()</code>",ordered:true,hints:["<code>orders.nlargest(5, 'amount')</code>",""]}),
+  PDQ('o:s3','topn',2,"3 cheapest orders","Write an expression for the <b>3 smallest</b> orders by <code>amount</code>.","orders.nsmallest(3, 'amount')",{req:/nsmallest/,reqMsg:"<code>.nsmallest()</code>",ordered:true,hints:["<code>orders.nsmallest(3, 'amount')</code>",""]}),
+  PDQ('o:oldest','topn',2,"3 oldest customers","Write an expression for the <b>3 oldest</b> customers by <code>age</code>.","customers.nlargest(3, 'age')",{req:/nlargest/,reqMsg:"<code>.nlargest()</code>",ordered:true,hints:["<code>customers.nlargest(3, 'age')</code>",""]}),
+  PDQ('o:youngest','topn',2,"3 youngest customers","Write an expression for the <b>3 youngest</b> customers by <code>age</code>.","customers.nsmallest(3, 'age')",{req:/nsmallest/,reqMsg:"<code>.nsmallest()</code>",ordered:true,hints:["<code>customers.nsmallest(3, 'age')</code>",""]}),
+  PDQ('o:l3cols','topn',3,"Top 3, two columns","Top 3 orders by <code>amount</code>, then select <b>product</b> and <b>amount</b>.","orders.nlargest(3, 'amount')[['product', 'amount']]",{req:/nlargest/,reqMsg:"<code>.nlargest()</code>",ordered:true,hints:["nlargest then [['product', 'amount']].","<code>orders.nlargest(3, 'amount')[['product', 'amount']]</code>"]}),
+  PDQ('o:sorthead','topn',3,"Top 3 via sort + head","Get the 3 most expensive orders by <b>sorting</b> descending and taking <code>.head(3)</code>.","orders.sort_values('amount', ascending=False).head(3)",{req:/head/,reqMsg:"<code>.head()</code>",ordered:true,hints:["sort_values(..., ascending=False).head(3).","<code>orders.sort_values('amount', ascending=False).head(3)</code>"]}),
+  PDQ('o:l2age','topn',2,"2 oldest","Write an expression for the <b>2 oldest</b> customers by <code>age</code>.","customers.nlargest(2, 'age')",{req:/nlargest/,reqMsg:"<code>.nlargest()</code>",ordered:true,hints:["<code>customers.nlargest(2, 'age')</code>",""]}),
+  PDQ('o:s5','topn',2,"5 cheapest orders","Write an expression for the <b>5 smallest</b> orders by <code>amount</code>.","orders.nsmallest(5, 'amount')",{req:/nsmallest/,reqMsg:"<code>.nsmallest()</code>",ordered:true,hints:["<code>orders.nsmallest(5, 'amount')</code>",""]}),
+  PDQ('o:l1','topn',2,"The single biggest order","Write an expression for the <b>1 largest</b> order by <code>amount</code>.","orders.nlargest(1, 'amount')",{req:/nlargest/,reqMsg:"<code>.nlargest()</code>",ordered:true,hints:["<code>orders.nlargest(1, 'amount')</code>",""]})
+],
+'nahandling':()=>[
+  PDQ('h:fill','nahandling',2,"Fill the gaps","Write an expression for <code>orders['status']</code> with missing values replaced by <b>unknown</b>.","orders['status'].fillna('unknown')",{req:/fillna/,reqMsg:"<code>.fillna()</code>",hints:["<code>orders['status'].fillna('unknown')</code>",""]}),
+  PDQ('h:drop','nahandling',3,"Drop missing-status rows","Write an expression for <code>orders</code> with rows whose <b>status is missing removed</b> (dropna on status).","orders.dropna(subset=['status'])",{req:/dropna/,reqMsg:"<code>.dropna()</code>",hints:["<code>orders.dropna(subset=['status'])</code>",""]}),
+  PDQ('h:isna','nahandling',3,"Only the missing","Keep the <code>orders</code> rows where <b>status is missing</b> (isna).","orders[orders['status'].isna()]",{req:/isna/,reqMsg:"<code>.isna()</code>",hints:["<code>orders[orders['status'].isna()]</code>",""]}),
+  PDQ('h:notna','nahandling',3,"Only the present","Keep the <code>orders</code> rows where <b>status is present</b> (notna).","orders[orders['status'].notna()]",{req:/notna/,reqMsg:"<code>.notna()</code>",hints:["<code>orders[orders['status'].notna()]</code>",""]}),
+  PDQ('h:countna','nahandling',3,"How many missing","Write an expression for <b>how many</b> orders have a missing status (isna then sum).","orders['status'].isna().sum()",{req:/isna/,reqMsg:"<code>.isna()</code>",hints:["isna().sum().","<code>orders['status'].isna().sum()</code>"]}),
+  PDQ('h:fillpending','nahandling',2,"Default to pending","Write an expression for <code>orders['status']</code> with missing values replaced by <b>pending</b>.","orders['status'].fillna('pending')",{req:/fillna/,reqMsg:"<code>.fillna()</code>",hints:["<code>orders['status'].fillna('pending')</code>",""]}),
+  PDQ('h:countnotna','nahandling',3,"How many present","Write an expression for how many orders <b>have</b> a status (notna then sum).","orders['status'].notna().sum()",{req:/notna/,reqMsg:"<code>.notna()</code>",hints:["notna().sum().","<code>orders['status'].notna().sum()</code>"]}),
+  PDQ('h:filldf','nahandling',4,"Fill in the frame","Fill missing <code>status</code> with <b>n/a</b> across the DataFrame, then select <b>id</b> and <b>status</b>.","orders.fillna({'status': 'n/a'})[['id', 'status']]",{req:/fillna/,reqMsg:"<code>.fillna()</code>",hints:["fillna with a dict of column→value.","<code>orders.fillna({'status': 'n/a'})[['id', 'status']]</code>"]})
+]
+});
+let PD_QUESTIONS=[];
+PD_CONCEPT_ORDER.forEach((cid,ci)=>{ const pool=PD_FAMILIES[cid](); seededShuffle(pool,0xDA7A+ci); pool.slice(0,PD_QUOTA[cid]).forEach(q=>PD_QUESTIONS.push(q)); });
+PD_QUESTIONS.forEach((q,i)=>{ q.num=i+1; q.hints=[...q.hints,'Full answer:<pre class="tut-code"><code>'+escapeText(q.solution)+'</code></pre>']; });
+let PD_BYID={}; PD_QUESTIONS.forEach(q=>PD_BYID[q.id]=q);
+let PD_BYCONCEPT={}; PD_CONCEPT_ORDER.forEach(c=>PD_BYCONCEPT[c]=PD_QUESTIONS.filter(q=>q.concept===c));
+console.assert(PD_QUESTIONS.length===150,'pd bank size',PD_QUESTIONS.length);
+TRACKS.pandas={ key:'pandas', label:'pandas', runtime:'pandas',
+  concepts:PD_CONCEPT_ORDER, meta:PD_META, prereq:PD_PREREQ, quota:PD_QUOTA,
+  tutorials:PD_TUTORIALS, questions:PD_QUESTIONS, byId:PD_BYID, byConcept:PD_BYCONCEPT,
+  divider:{before:'groupby',label:'Intermediate'} };
+
+
 
 /* ---------------- Persistent state (v3) — per-track progress ---------------- */
 const SAVE_KEY='querious.v3';
@@ -1583,7 +1862,9 @@ function load(){
     const at=saved.allTracks||{};
     at.sql=Object.assign(defaultProgress(),at.sql||{});
     at.python=Object.assign(defaultProgress(),at.python||{});
-    const st={v:3,track:(saved.track==='python'?'python':'sql'),seenIntro:!!saved.seenIntro,seenPyIntro:!!saved.seenPyIntro,allTracks:at};
+    at.pandas=Object.assign(defaultProgress(),at.pandas||{});
+    const validTrack=(saved.track==='python'||saved.track==='pandas')?saved.track:'sql';
+    const st={v:3,track:validTrack,seenIntro:!!saved.seenIntro,seenPyIntro:!!saved.seenPyIntro,seenPdIntro:!!saved.seenPdIntro,allTracks:at};
     Object.assign(st,st.allTracks[st.track]);
     return st;
   }
@@ -1593,15 +1874,16 @@ function load(){
     const v2=JSON.parse(localStorage.getItem('querious.v2'));
     if(v2&&v2.v===2){ PROGRESS_FIELDS.forEach(f=>{ if(v2[f]!==undefined) sqlProg[f]=v2[f]; }); migrated=true; }
   }catch(e){}
-  const st={v:3,track:'sql',seenIntro:migrated,seenPyIntro:false,allTracks:{sql:sqlProg,python:defaultProgress()}};
+  const st={v:3,track:'sql',seenIntro:migrated,seenPyIntro:false,seenPdIntro:false,allTracks:{sql:sqlProg,python:defaultProgress(),pandas:defaultProgress()}};
   Object.assign(st,st.allTracks.sql);
   return st;
 }
 function syncFlat(){ const p=state.allTracks[state.track]; PROGRESS_FIELDS.forEach(f=>{ p[f]=state[f]; }); }
-function save(){ try{ syncFlat(); localStorage.setItem(SAVE_KEY,JSON.stringify({v:3,track:state.track,seenIntro:state.seenIntro,seenPyIntro:state.seenPyIntro,allTracks:state.allTracks})); }catch(e){} }
+function save(){ try{ syncFlat(); localStorage.setItem(SAVE_KEY,JSON.stringify({v:3,track:state.track,seenIntro:state.seenIntro,seenPyIntro:state.seenPyIntro,seenPdIntro:state.seenPdIntro,allTracks:state.allTracks})); }catch(e){} }
 function activateTrack(t){
   if(state.track!==t) syncFlat();
   state.track=t;
+  if(!state.allTracks[t]) state.allTracks[t]=defaultProgress();
   PROGRESS_FIELDS.forEach(f=>{ state[f]=state.allTracks[t][f]; });
   const T=TRACKS[t];
   CONCEPT_ORDER=T.concepts; CONCEPT_META=T.meta; PREREQ=T.prereq; QUOTA=T.quota;
@@ -1754,9 +2036,13 @@ function enterTrack(t){
     if(resume){renderSkills();openQuestion(resume);} else openNext();
     maybeWelcome(t);
   };
-  if(TRACKS[t].runtime==='python' && !pyReady()){
-    showPyLoading();
+  const rt=TRACKS[t].runtime;
+  if(rt==='python' && !pyReady()){
+    showPyLoading('Python');
     ensurePyodide().then(()=>{ hidePyLoading(); proceed(); }).catch(e=>{ console.error(e); pyLoadError(); });
+  } else if(rt==='pandas' && !pdReady()){
+    showPyLoading('pandas');
+    ensurePandas().then(()=>{ hidePyLoading(); proceed(); }).catch(e=>{ console.error(e); pyLoadError(); });
   } else proceed();
 }
 function maybeWelcome(t){
@@ -1766,6 +2052,9 @@ function maybeWelcome(t){
   } else if(t==='python' && !state.seenPyIntro){
     showToast('🐍 <b>Python track.</b> '+QUESTIONS.length+' questions across '+CONCEPT_ORDER.length+' skills — printing through list comprehensions. Your code runs in <b>real Python</b> (Pyodide) right here. Solve one and the next loads automatically.',null,9000);
     state.seenPyIntro=true;save();
+  } else if(t==='pandas' && !state.seenPdIntro){
+    showToast('🐼 <b>pandas track.</b> '+QUESTIONS.length+' questions across '+CONCEPT_ORDER.length+' skills — selecting, filtering, grouping, merging — in <b>real pandas</b>. Write an expression against the <code>customers</code> / <code>orders</code> DataFrames and run it.',null,9000);
+    state.seenPdIntro=true;save();
   }
 }
 
@@ -1785,8 +2074,11 @@ function openQuestion(q,opts){
   state.lastQid=q.id;save();
   renderSkills();
   const meta=CONCEPT_META[q.concept];
-  const isPy=state.track==='python';
-  const vizBlock=(!isPy&&meta.join)?joinVizHTML():'';
+  const rt=TRACKS[state.track].runtime;
+  const isPy=rt!=='sql';
+  const isPandas=rt==='pandas';
+  const pandasRefBlock='\n      <div class="section-label">The DataFrames · <span style="text-transform:none;font-weight:500;color:var(--muted)">reference — <code>customers</code> &amp; <code>orders</code> (and <code>df</code> = orders)</span></div>\n      <div class="schema" id="pdref"></div>';
+  const vizBlock=(rt==='sql'&&meta.join)?joinVizHTML():'';
   const tutActive=!!TUTORIALS[q.concept]&&(opts.tut===true||(opts.tut!==false&&!state.tutsSeen[q.concept]));
   const dots='●'.repeat(q.level)+'○'.repeat(5-q.level);
   const solvedBefore=!!state.solved[q.id];
@@ -1816,9 +2108,10 @@ function openQuestion(q,opts){
         </div>
       </div>
       ${vizBlock}
-      ${isPy?'':tablesBlock}
+      ${rt==='sql'?tablesBlock:(isPandas?pandasRefBlock:'')}
     </div>`;
-    if(!isPy){renderSchema();if(meta.join)initJoinViz();}
+    if(rt==='sql'){renderSchema();if(meta.join)initJoinViz();}
+    else if(isPandas){renderPandasRef();}
     initTut(q.concept);
     return;
   }
@@ -1851,11 +2144,12 @@ function openQuestion(q,opts){
       </div>
       <div class="result" id="result"></div>
       <div class="hints" id="hints"></div>
-      ${isPy?'':tablesBlock}
+      ${rt==='sql'?tablesBlock:(isPandas?pandasRefBlock:'')}
     </div>`;
-  if(!isPy)renderSchema();
+  if(rt==='sql')renderSchema();
+  else if(isPandas)renderPandasRef();
   wireEditor('');
-  if(!isPy&&meta.join)initJoinViz();
+  if(rt==='sql'&&meta.join)initJoinViz();
   const rb=document.getElementById('tut-replay');
   if(rb)rb.onclick=()=>openQuestion(CURQ,{tut:true});
   document.getElementById('skip-q').onclick=()=>{showToast('Skipped — no penalty. On to the next one.',null,2500);openNext();};
@@ -1891,13 +2185,14 @@ function initTut(cid){
 }
 function renderTutStep(steps){
   const s=steps[tutStep];
-  const isPy=state.track==='python';
+  const rt=TRACKS[state.track].runtime;
+  const isPy=rt!=='sql';
   const code=s.sql||s.code||'';
   curTutSql=code;
   document.getElementById('tut-num').textContent=tutStep+1;
   document.getElementById('tut-dots').innerHTML=steps.map((_,k)=>`<span class="tdot${k<=tutStep?' on':''}"></span>`).join('');
   let html=`<p class="blurb tut-say">${s.say}</p>`;
-  if(code)html+=`<pre class="tut-code"><code>${(isPy?pyHighlight:highlight)(escapeHtml(code))}</code></pre>`;
+  if(code)html+=`<pre class="tut-code"><code>${(rt==='sql'?highlight:pyHighlight)(escapeHtml(code))}</code></pre>`;
   if(s.new)html+=`<div class="tut-new">🆕 New piece: <code>${escapeText(s.new)}</code></div>`;
   if(code&&s.run)html+=`<div><button class="btn tiny" id="tut-run">▶ Run it</button></div><div class="tut-result" id="tut-result"></div>`;
   const body=document.getElementById('tut-body');
@@ -1906,7 +2201,11 @@ function renderTutStep(steps){
   const tr=document.getElementById('tut-run');
   if(tr)tr.onclick=()=>{
     const box=document.getElementById('tut-result');box.innerHTML='';
-    if(isPy){
+    if(rt==='pandas'){
+      const r=runPd(code,true);
+      if(!r.ok)box.innerHTML=`<div class="banner err"><span class="bicon">⚠️</span><span>${escapeText(r.err||'error')}</span></div>`;
+      else box.appendChild(pyOut(r.disp||'(no result)'));
+    }else if(isPy){
       const r=runOne(code,{kind:'print'});
       if(!r.ok)box.innerHTML=`<div class="banner err"><span class="bicon">⚠️</span><span>${escapeText(r.err||'error')}</span></div>`;
       else box.appendChild(pyOut((r.out&&r.out.replace(/\n+$/,''))||'(no output)'));
@@ -1921,7 +2220,7 @@ function renderTutStep(steps){
   };
   document.getElementById('tut-back').style.visibility=tutStep===0?'hidden':'visible';
   document.getElementById('tut-next').textContent=tutStep===steps.length-1?'✍️ My turn — try it':'Next →';
-  if(!isPy){ if(s.keys){clearHighlights();hlKeys();} else applyHighlightsFor(code); }
+  if(rt==='sql'){ if(s.keys){clearHighlights();hlKeys();} else applyHighlightsFor(code); }
 }
 
 /* ============================================================
@@ -1972,11 +2271,14 @@ function ensurePyodide(){
   })();
   return pyodideLoading;
 }
-function showPyLoading(){
+function showPyLoading(label){
+  label=label||'Python';
   const o=document.getElementById('overlay');
   document.getElementById('spinner').style.display='';
-  document.getElementById('ov-title').textContent='Loading Python…';
-  document.getElementById('ov-msg').innerHTML='Fetching a real Python runtime (Pyodide). First time only — about 10&nbsp;MB — then it runs instantly.';
+  document.getElementById('ov-title').textContent='Loading '+label+'…';
+  document.getElementById('ov-msg').innerHTML = label==='pandas'
+    ? 'Loading Python + the pandas library (first time only — a ~20&nbsp;MB download). Then it runs instantly.'
+    : 'Fetching a real Python runtime (Pyodide). First time only — about 10&nbsp;MB — then it runs instantly.';
   o.style.display='grid';
 }
 function hidePyLoading(){document.getElementById('overlay').style.display='none';}
@@ -2069,6 +2371,131 @@ const PY_BUILTINS=['print','len','range','sum','max','min','sorted','int','str',
 const PY_HL_RE=new RegExp("(#[^\\n]*)|('[^']*'|\"[^\"]*\")|(\\b\\d+(?:\\.\\d+)?\\b)|\\b("+PY_KEYWORDS.join('|')+")\\b|\\b("+PY_BUILTINS.join('|')+")\\b",'g');
 function pyHighlight(escaped){return escaped.replace(PY_HL_RE,(m,c,s,n,kw,bi)=>{if(c)return '<span class="t-com">'+c+'</span>';if(s)return '<span class="t-str">'+s+'</span>';if(n)return '<span class="t-num">'+n+'</span>';if(kw)return '<span class="t-kw">'+m+'</span>';if(bi)return '<span class="t-fn">'+m+'</span>';return m;});}
 
+/* ============================================================
+   PANDAS RUNTIME — Python + pandas (lazy-loaded when the pandas track opens)
+   ============================================================ */
+const _pdCustomers = CUSTOMERS.map(c=>({id:c[0],name:c[1],city:c[2],age:c[3]}));
+const _pdOrders = ORDERS.filter(o=>o[1]!==null).map(o=>{const m=ORDER_META[o[0]];return {id:o[0],customer_id:o[1],product:o[2],amount:o[3],order_date:m[0],status:m[1]};});
+const PANDAS_SETUP = `import pandas as pd, json, numpy as np
+customers = pd.DataFrame(json.loads(r'''${JSON.stringify(_pdCustomers)}'''))
+orders = pd.DataFrame(json.loads(r'''${JSON.stringify(_pdOrders)}'''))
+df = orders
+def _num(x):
+    try:
+        x = x.item()
+    except Exception:
+        pass
+    if isinstance(x, float):
+        return repr(round(x, 6))
+    return repr(x)
+def _pcanon(v, ordered):
+    if isinstance(v, pd.DataFrame):
+        d = v.reset_index(drop=True)
+        if not ordered and len(d.columns) > 0:
+            d = d.sort_values(by=list(d.columns), kind='stable').reset_index(drop=True)
+        return 'DF[' + ','.join(map(str, d.columns)) + ']\\n' + d.to_csv(index=False)
+    if isinstance(v, pd.Series):
+        vals = [_num(x) for x in v.values]
+        if not ordered:
+            vals = sorted(vals)
+        return 'S\\n' + '\\n'.join(vals)
+    if isinstance(v, (list, tuple)):
+        return repr([_num(x) for x in v])
+    return _num(v)
+def _pdisp(v):
+    if isinstance(v, pd.DataFrame):
+        return v.head(25).to_string(index=False)
+    if isinstance(v, pd.Series):
+        return v.head(25).to_string()
+    return str(v)
+def _pdrun(code, ordered):
+    env = {'pd': pd, 'np': np, 'customers': customers.copy(), 'orders': orders.copy()}
+    env['df'] = env['orders']
+    try:
+        val = eval(code, env)
+        return json.dumps({'ok': True, 'val': _pcanon(val, ordered), 'disp': _pdisp(val)})
+    except Exception as e:
+        return json.dumps({'ok': False, 'err': type(e).__name__ + ': ' + str(e)})`;
+let pandasReady=false, pandasLoading=null;
+function pdReady(){ return pandasReady; }
+function ensurePandas(){
+  if(pandasReady) return Promise.resolve();
+  if(pandasLoading) return pandasLoading;
+  pandasLoading=(async()=>{
+    const py=await ensurePyodide();
+    await py.loadPackage('pandas');
+    py.runPython(PANDAS_SETUP);
+    pandasReady=true;
+  })();
+  return pandasLoading;
+}
+function runPd(code, ordered){
+  try{
+    pyodide.globals.set('_pdcode', code);
+    pyodide.globals.set('_pdord', !!ordered);
+    return JSON.parse(pyodide.runPython('_pdrun(_pdcode, _pdord)'));
+  }catch(e){ return {ok:false, err:String((e&&e.message)||e)}; }
+}
+function checkPandas(q, code){
+  if(q.requires && !q.requires.test(code)) return {ok:false, msg:'This one is practising '+q.reqMsg+' — make sure your code uses it.'};
+  const got=runPd(code, q.ordered);
+  if(!got.ok) return {error:got.err};
+  const want=runPd(q.solution, q.ordered);
+  return got.val===want.val ? {ok:true, disp:got.disp} : {ok:false, msg:'Not the expected result yet.', disp:got.disp};
+}
+function runPandas(){
+  const q=view==='q'?CURQ:null;
+  const code=taEl.value;
+  const resBox=document.getElementById('result');
+  if(!code.trim()){resBox.innerHTML='';banner('warn','✏️','Write a pandas expression first, then hit Run.');return;}
+  if(view==='sandbox'){
+    const r=runPd(code,true);
+    resBox.innerHTML='';
+    if(!r.ok){banner('err','⚠️','<b>Python error:</b> '+escapeText(r.err||'error'));}
+    else{banner('ok','✓','Ran.');resBox.appendChild(pyOut(r.disp||'(no result)'));}
+    return;
+  }
+  T.attempts++;
+  const chk=checkPandas(q,code);
+  resBox.innerHTML='';
+  if(chk.error!==undefined){
+    T.errors++;
+    banner('err','⚠️','<b>Python error:</b> '+escapeText(chk.error));
+    if(T.errors>=2){document.getElementById('reveal-btn').style.display='inline-block';if(hintsShown===0)showNextHint(true);}
+    return;
+  }
+  if(chk.ok){ complete(q, chk.disp?pyOut(chk.disp):null); }
+  else{
+    banner('err','✗','<b>Not quite.</b> '+chk.msg);
+    if(chk.disp)resBox.appendChild(pyOut(chk.disp));
+    if(T.attempts>=2||T.errors>=2)document.getElementById('reveal-btn').style.display='inline-block';
+    if(T.attempts>=2&&hintsShown===0)showToast('💡 Tip: tap <b>Hint</b> for a nudge.',null,4000);
+  }
+}
+async function __pdBankTest(){
+  await ensurePandas();
+  const bad=[],per={};
+  for(const q of (TRACKS.pandas?TRACKS.pandas.questions:[])){
+    per[q.concept]=(per[q.concept]||0)+1;
+    if(q.requires && !q.requires.test(q.solution)){bad.push({id:q.id,err:'requires fails own solution'});continue;}
+    const r=runPd(q.solution,q.ordered);
+    if(!r.ok){bad.push({id:q.id,err:r.err});continue;}
+    if(!r.val){bad.push({id:q.id,err:'empty val'});}
+  }
+  return {total:(TRACKS.pandas?TRACKS.pandas.questions.length:0),bad,per};
+}
+window.__pdBankTest=__pdBankTest;
+function renderPandasRef(){
+  const host=document.getElementById('pdref'); if(!host) return;
+  host.innerHTML = pdTableHTML('customers', _pdCustomers) + pdTableHTML('orders', _pdOrders);
+}
+function pdTableHTML(name, rows){
+  const cols=Object.keys(rows[0]);
+  const head=cols.map(c=>`<th>${c}</th>`).join('');
+  const body=rows.map(r=>'<tr>'+cols.map(c=>{const v=r[c];const isNull=(v===null||v===undefined);return `<td class="${isNull?'null':''}">${isNull?'NaN':escapeText(String(v))}</td>`;}).join('')+'</tr>').join('');
+  return `<div class="tbl-card"><h3>🐼 ${name} <span class="pill">DataFrame</span></h3><div class="tbl-wrap"><table class="data"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+}
+
 /* ---------------- Running & checking ---------------- */
 /* Plain-English diagnosis of what's actually wrong with the user's SQL,
    so an error reads like a tutor, not a parser. Returns a string or null. */
@@ -2107,7 +2534,9 @@ function diagnose(sql,errMsg,q){
   return null;
 }
 function runQuery(){
-  if(state.track==='python')return runPython();
+  const rt=TRACKS[state.track].runtime;
+  if(rt==='pandas')return runPandas();
+  if(rt==='python')return runPython();
   const q=view==='q'?CURQ:null;
   const sql=taEl.value.trim();
   const resBox=document.getElementById('result');
@@ -2292,7 +2721,7 @@ function wireEditor(initial){
   analyzeSql();
   taEl.focus({preventScroll:true});
 }
-function paint(){hlEl.innerHTML=(state.track==='python'?pyHighlight:highlight)(escapeHtml(taEl.value))+'\n';}
+function paint(){hlEl.innerHTML=(TRACKS[state.track].runtime==='sql'?highlight:pyHighlight)(escapeHtml(taEl.value))+'\n';}
 function insertAtCursor(text){
   const s=taEl.selectionStart,e=taEl.selectionEnd;
   taEl.value=taEl.value.slice(0,s)+text+taEl.value.slice(e);
@@ -2494,26 +2923,35 @@ function selectJoin(jt){
 function openSandbox(){
   clearTimeout(autoTimer);autoTimer=null;
   view='sandbox';renderSkills();
-  const isPy=state.track==='python';
+  const rt=TRACKS[state.track].runtime;
+  const isSql=rt==='sql', isPandas=rt==='pandas';
   const m=document.getElementById('main');
+  const blurb = isPandas ? 'No goals, no checking — just you and <b>pandas</b>. Write an expression against <code>customers</code>, <code>orders</code> (or <code>df</code>) and run it.'
+    : isSql ? 'No goals, no checking — just you and the database. Write any SQL against <code>customers</code> and <code>orders</code>.'
+    : 'No goals, no checking — just you and real Python. Write any Python and run it; use <code>print()</code> to see values.';
+  const ctx = isSql ? '<div class="section-label">The tables</div><div class="schema" id="schema"></div>'
+    : isPandas ? '<div class="section-label">The DataFrames</div><div class="schema" id="pdref"></div>' : '';
   m.innerHTML=`
     <div class="card pad lesson-head">
       <div class="crumbs">Free play</div>
       <h1>Sandbox</h1>
-      <p class="blurb">No goals, no checking — just you and ${isPy?'real Python':'the database'}. ${isPy?'Write any Python and run it; use <code>print()</code> to see values.':'Write any SQL against <code>customers</code> and <code>orders</code>.'}</p>
-      ${isPy?'':'<div class="section-label">The tables</div><div class="schema" id="schema"></div>'}
-      <div class="section-label">${isPy?'Your code':'Your query'}</div>
+      <p class="blurb">${blurb}</p>
+      ${ctx}
+      <div class="section-label">${isSql?'Your query':'Your code'}</div>
       <div class="editor-wrap">
         <div class="editor" id="editor">
           <pre aria-hidden="true"><code id="hl"></code></pre>
           <textarea id="sql" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
         </div>
-        <div class="run-row"><button class="btn run" id="run-btn">${isPy?'Run code ▸':'Run query ▸'}</button><span class="kbd">⌘/Ctrl + Enter</span></div>
+        <div class="run-row"><button class="btn run" id="run-btn">${isSql?'Run query ▸':'Run code ▸'}</button><span class="kbd">⌘/Ctrl + Enter</span></div>
       </div>
       <div class="result" id="result"></div>
     </div>`;
-  if(!isPy)renderSchema();
-  wireEditor(isPy?'# Try anything! Use print() to see output.\nnums = [4, 8, 15, 16, 23, 42]\nprint(sum(nums))\nprint([n for n in nums if n > 15])':'SELECT customers.name, customers.city, orders.product, orders.amount\nFROM customers\nLEFT JOIN orders ON customers.id = orders.customer_id\nORDER BY orders.amount DESC;');
+  if(isSql)renderSchema(); else if(isPandas)renderPandasRef();
+  const starter = isSql ? 'SELECT customers.name, customers.city, orders.product, orders.amount\nFROM customers\nLEFT JOIN orders ON customers.id = orders.customer_id\nORDER BY orders.amount DESC;'
+    : isPandas ? "orders.groupby('product')['amount'].sum().reset_index()"
+    : '# Try anything! Use print() to see output.\nnums = [4, 8, 15, 16, 23, 42]\nprint(sum(nums))\nprint([n for n in nums if n > 15])';
+  wireEditor(starter);
 }
 
 /* ---------------- UI helpers ---------------- */
