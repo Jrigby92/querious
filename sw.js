@@ -1,7 +1,7 @@
 /* Querious service worker — makes the web app installable & offline-capable.
    Cache-first: after the first online load, the app shell + the SQL/Python/pandas
    runtimes (from jsdelivr) are cached, so subsequent loads work offline. */
-const CACHE = 'querious-v1';
+const CACHE = 'querious-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 

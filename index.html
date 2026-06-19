@@ -14,8 +14,8 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" href="icon-192.png" />
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
-<script src="https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/sql-wasm.js"></script>
-<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="./vendor/sqljs/sql-wasm.js"></script>
+<script src="./vendor/pyodide/pyodide.js"></script>
 <style>
   :root{
     --bg:#0a0b14;
@@ -330,7 +330,9 @@
   #confetti{position:fixed;inset:0;pointer-events:none;z-index:80}
 
   @media (max-width:980px){
-    .app{grid-template-columns:1fr}
+    .app{display:flex;flex-direction:column}
+    main{order:0}
+    aside{order:1}
     aside{position:relative;top:0;height:auto;border-right:none;border-bottom:1px solid var(--stroke)}
     .schema{grid-template-columns:1fr}
     .joinviz{grid-template-columns:1fr}
@@ -338,10 +340,6 @@
   }
   /* Phones: let the header wrap, tighten spacing, trim non-essentials */
   @media (max-width:600px){
-    /* question/editor first, skills list below */
-    .app{display:flex;flex-direction:column}
-    main{order:0}
-    aside{order:1}
     header{flex-wrap:wrap;gap:8px;padding:10px 14px}
     .brand .tag{display:none}
     .trackswitch{margin-left:0;order:3;width:100%;justify-content:center}
@@ -2031,7 +2029,7 @@ let db=null,view='q',CURQ=null,T=null,hintsShown=0,autoTimer=null,pendingTutQ=nu
 (async function init(){
   if(typeof initSqlJs==='undefined'){return failBoot();}
   try{
-    const SQL=await initSqlJs({locateFile:f=>`https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/${f}`});
+    const SQL=await initSqlJs({locateFile:f=>`./vendor/sqljs/${f}`});
     db=new SQL.Database();db.run(SCHEMA_SQL);
     try{db.exec('SELECT 1 FROM customers FULL JOIN orders ON 1=0 LIMIT 1');}
     catch(e){console.warn('FULL JOIN not supported by this engine build');}
@@ -2299,7 +2297,7 @@ function ensurePyodide(){
   if(pyodideLoading)return pyodideLoading;
   pyodideLoading=(async()=>{
     if(typeof loadPyodide==='undefined')throw new Error('Pyodide loader not available');
-    const py=await loadPyodide({indexURL:'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/'});
+    const py=await loadPyodide({indexURL:'./vendor/pyodide/'});
     py.runPython(PY_HARNESS);
     pyodide=py; return py;
   })();
