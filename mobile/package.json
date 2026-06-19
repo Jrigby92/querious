@@ -1,0 +1,16 @@
+{
+  "name": "querious-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Querious — iOS/Android via Capacitor (same offline web core)",
+  "scripts": {
+    "copyweb": "node copyweb.js",
+    "sync": "node copyweb.js && cap sync",
+    "open:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
+    "@capacitor/ios": "^6.2.1"
+  }
+}

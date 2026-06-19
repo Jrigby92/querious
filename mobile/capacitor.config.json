@@ -1,0 +1,9 @@
+{
+  "appId": "com.jrigby92.querious",
+  "appName": "Querious",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0a0b14"
+  }
+}
