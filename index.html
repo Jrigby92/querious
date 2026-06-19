@@ -2,8 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Querious — learn SQL by doing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Querious — learn SQL, Python & pandas by doing</title>
+<!-- PWA: installable + offline -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#0a0b14" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Querious" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="icon-192.png" />
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 <script src="https://cdn.jsdelivr.net/npm/sql.js@1.12.0/dist/sql-wasm.js"></script>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
 <style>
@@ -325,6 +335,30 @@
     .schema{grid-template-columns:1fr}
     .joinviz{grid-template-columns:1fr}
     .meter{width:90px}
+  }
+  /* Phones: let the header wrap, tighten spacing, trim non-essentials */
+  @media (max-width:600px){
+    /* question/editor first, skills list below */
+    .app{display:flex;flex-direction:column}
+    main{order:0}
+    aside{order:1}
+    header{flex-wrap:wrap;gap:8px;padding:10px 14px}
+    .brand .tag{display:none}
+    .trackswitch{margin-left:0;order:3;width:100%;justify-content:center}
+    .track-btn{flex:1;padding:8px 0}
+    .ability{display:none}
+    .progress-chip{font-size:12px}
+    main{padding:16px 14px 64px}
+    .pad{padding:16px 15px}
+    .lesson-head h1{font-size:21px}
+    .blurb{font-size:14px}
+    .joinviz{grid-template-columns:1fr}
+    svg#venn{max-width:320px;margin:0 auto;display:block}
+    .editor pre,.editor textarea{font-size:14px}
+    table.data th,table.data td{padding:7px 10px;font-size:12px}
+  }
+  @supports(padding:env(safe-area-inset-top)){
+    header{padding-top:calc(10px + env(safe-area-inset-top))}
   }
 </style>
 </head>
